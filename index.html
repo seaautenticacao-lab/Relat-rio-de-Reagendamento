@@ -20,6 +20,8 @@
         .btn-upload { background: var(--primary); }
         .btn-download { background: var(--success); }
         .btn-mini { padding: 4px 8px; font-size: 10px; background: #6c757d; border-radius: 4px; border: none; color: white; cursor: pointer; }
+        .btn-delete { background: var(--danger); padding: 5px 8px; border-radius: 4px; border: none; color: white; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .btn-delete:hover { background: #a71d2a; transform: scale(1.1); }
 
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -44,6 +46,8 @@
         
         .filter-container { margin-bottom: 15px; }
         #filtroTabela { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+
+        .no-print { text-align: center; }
     </style>
 </head>
 <body>
@@ -91,12 +95,13 @@
             <thead>
                 <tr>
                     <th>PROTOCOLO</th>
-                    <th>CLIENTE</th>
+                    <th>CLIENTE (A-Z)</th>
                     <th>OP. ABERTURA</th>
                     <th>LOCALIZAÇÃO</th>
                     <th>MOTIVO</th>
                     <th>STATUS</th>
                     <th>DATA REAGENDAMENTO</th>
+                    <th class="no-print">AÇÕES</th>
                 </tr>
             </thead>
             <tbody id="corpoTabela"></tbody>
@@ -119,6 +124,8 @@
             const res = await response.json();
             if (res.record && res.record.data) {
                 dadosAtuais = res.record.data;
+                // Ordena antes de mostrar
+                ordenarPorNome();
                 renderizar(dadosAtuais);
                 document.getElementById('statusMsg').innerText = "Dados Sincronizados";
             }
@@ -131,11 +138,31 @@
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             dadosAtuais = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
+            
+            // Ordena novos dados importados
+            ordenarPorNome();
             renderizar(dadosAtuais);
             salvarNaNuvem();
         };
         reader.readAsArrayBuffer(e.target.files[0]);
     });
+
+    // Função de Ordenação por Nome (Coluna B / Índice 1)
+    function ordenarPorNome() {
+        if (!dadosAtuais || dadosAtuais.length === 0) return;
+        
+        // Remove cabeçalhos se existirem no array para não bagunçar a ordem
+        const header = dadosAtuais[0][1] === "Nome / Documento" ? dadosAtuais.shift() : null;
+
+        dadosAtuais.sort((a, b) => {
+            let nomeA = (a[1] || "").toString().toLowerCase();
+            let nomeB = (b[1] || "").toString().toLowerCase();
+            return nomeA.localeCompare(nomeB);
+        });
+
+        // Devolve o cabeçalho se ele existia
+        if (header) dadosAtuais.unshift(header);
+    }
 
     async function salvarNaNuvem() {
         document.getElementById('statusMsg').innerText = "Salvando...";
@@ -147,6 +174,14 @@
             });
             document.getElementById('statusMsg').innerText = "Sincronizado";
         } catch (err) {}
+    }
+
+    function apagarLinha(index) {
+        if (confirm("Deseja realmente excluir este registro?")) {
+            dadosAtuais.splice(index, 1);
+            renderizar(dadosAtuais);
+            salvarNaNuvem();
+        }
     }
 
     function atualizarData(indexLinha, novaData) {
@@ -162,7 +197,7 @@
         let html = '';
 
         rows.forEach((row, index) => {
-            // Ignora cabeçalho e verifica se há protocolo na Coluna C (índice 2)
+            // Filtra linhas válidas (que tenham Protocolo na coluna C/Índice 2)
             if (row[2] && row[2] !== "Protocolo") {
                 const protocolo = row[2];
                 const cliente = row[1] ? row[1].split('CPF:')[0] : '---';
@@ -181,12 +216,13 @@
 
                 html += `<tr>
                     <td><strong>${protocolo}</strong></td>
-                    <td>${cliente}</td>
+                    <td style="text-transform: uppercase;">${cliente}</td>
                     <td><span class="op-badge">${opAbertura}</span></td>
                     <td><strong>${cidade}</strong><br><small>${bairro}</small></td>
                     <td>${motivo}</td>
                     <td class="status-${status}">${status === 'S' ? 'FINALIZADO' : 'PENDENTE'}</td>
                     <td><input type="date" class="input-data" value="${dataReag}" onchange="atualizarData(${index}, this.value)"></td>
+                    <td class="no-print"><button class="btn-delete" onclick="apagarLinha(${index})">🗑️</button></td>
                 </tr>`;
             }
         });
@@ -220,11 +256,18 @@
     }
 
     function baixarPNG(id, nome) {
+        const deletes = document.querySelectorAll('.no-print');
+        const filtro = document.querySelector('.filter-container');
+        deletes.forEach(d => d.style.visibility = 'hidden');
+        filtro.style.display = 'none';
+
         html2canvas(document.getElementById(id), { scale: 2 }).then(canvas => {
             const link = document.createElement('a');
             link.download = `${nome}.png`;
             link.href = canvas.toDataURL();
             link.click();
+            deletes.forEach(d => d.style.visibility = 'visible');
+            filtro.style.display = 'block';
         });
     }
 
