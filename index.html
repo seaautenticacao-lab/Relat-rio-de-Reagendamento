@@ -123,7 +123,6 @@
         .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition); font-size: 0.8rem; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .btn-danger { background: #fee2e2; color: var(--danger); }
 
         .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #1e293b; color: white; border-radius: 8px; transform: translateY(150%); transition: 0.3s; z-index: 1000; font-size: 0.85rem; }
         .toast.show { transform: translateY(0); }
@@ -189,7 +188,7 @@
                             <th>Equipe</th>
                             <th>Ocorrência Contrato</th>
                             <th>Status</th>
-                            <th style="text-align: right;">Ações</th>
+                            <th style="text-align: right;">Ação</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -201,6 +200,10 @@
     <div id="toast" class="toast"><span id="toast-msg"></span></div>
 
     <script>
+        // CONFIGURAÇÕES DE CHAVES SOLICITADAS
+        const MASTER_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
+        const BIN_KEY = "696fe1e1ae596e708fe97dbb";
+
         let allData = [];
         let filteredData = [];
         const STORAGE_KEY = 'isp_protocol_final_v1';
@@ -228,7 +231,7 @@
                     const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
                     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     
-                    // ZERA OS DADOS ANTES DE IMPORTAR NOVOS
+                    // Limpeza total de memória antes de processar
                     allData = []; 
                     
                     allData = rows.filter(row => {
@@ -253,11 +256,11 @@
                     
                     updateDrops();
                     applyFilters();
-                    showToast(`Importado! Total de ${allData.length} registros encontrados.`);
+                    showToast(`Importado! ${allData.length} registros novos carregados.`);
                 } catch(err) { showToast("Erro na leitura!"); }
             };
             reader.readAsBinaryString(file);
-            this.value = ''; // Reseta o input para permitir importar o mesmo arquivo se necessário
+            this.value = '';
         });
 
         function clearFilters() {
@@ -305,9 +308,9 @@
                     <td>${item.equipe}</td>
                     <td><div class="txt-full">${item.ocorrencia}</div></td>
                     <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${isDone ? 'ABERTO' : 'PENDENTE'}</span></td>
-                    <td style="text-align: right; white-space: nowrap;">
+                    <td style="text-align: right;">
                         <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggle('${item.id}')">
-                            <i class="fas ${isDone ? 'fa-undo' : 'fa-check'}"></i>
+                            ${isDone ? 'Desfazer' : 'Abrir'}
                         </button>
                     </td>
                 `;
