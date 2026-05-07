@@ -3,329 +3,374 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Gerencial - Reagendamentos</title>
+    <title>Protocol Control | ISP System</title>
     
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <style>
-        :root { 
-            --primary: #0056b3; 
-            --success: #28a745; 
-            --danger: #dc3545; 
-            --warning: #ffc107;
-            --dark: #1a1d20; 
-            --light: #f8f9fa; 
+        :root {
+            --primary: #2563eb;
+            --danger: #ef4444;
+            --bg-app: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --sidebar-w: 260px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        
-        #captureArea { padding: 15px; background: #f0f2f5; border-radius: 10px; }
-        .container { max-width: 1400px; margin: auto; }
-        
-        .header { 
-            background: white; padding: 20px; border-radius: 10px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; 
-            display: flex; justify-content: space-between; align-items: center; 
-            border-top: 6px solid var(--primary); 
+
+        .dark-mode {
+            --bg-app: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
         }
-        
-        .actions { display: flex; gap: 10px; }
-        .btn { padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; transition: 0.3s; color: white; text-transform: uppercase; font-size: 11px; display: flex; align-items: center; gap: 5px; }
-        .btn-upload { background: var(--primary); }
-        .btn-download { background: var(--success); }
-        .btn-mini { padding: 4px 8px; font-size: 10px; background: #6c757d; border-radius: 4px; border: none; color: white; cursor: pointer; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .stat-card h3 { margin: 0; color: #666; font-size: 0.8rem; text-transform: uppercase; }
-        .stat-card .value { font-size: 2.2rem; font-weight: bold; margin-top: 5px; }
 
-        .details-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        .box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-height: 500px; overflow-y: auto; }
-        .box h4 { margin-top: 0; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; color: var(--primary); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 5; }
-        
-        .box-capture { max-height: none !important; overflow: visible !important; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-app); color: var(--text-main); transition: var(--transition); overflow-x: hidden; }
 
-        .total-counter-box { background: #f8f9fa; color: #333; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: center; font-weight: 800; font-size: 0.9rem; border: 2px solid var(--primary); }
+        .app-container { display: flex; min-height: 100vh; }
 
-        .list-row { 
-            display: flex; justify-content: space-between; padding: 8px 10px; 
-            border-bottom: 1px solid #f9f9f9; font-size: 0.85rem; 
-            cursor: pointer; transition: 0.2s; border-radius: 4px;
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+            transition: var(--transition);
+            left: 0;
         }
-        .list-row:hover { background: #eef2ff; color: var(--primary); }
-        .badge { background: #e7f0fd; color: var(--primary); padding: 2px 8px; border-radius: 4px; font-weight: bold; }
 
-        table { width: 100%; background: white; border-radius: 10px; overflow: hidden; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px;}
-        th { background: #f8f9fa; padding: 12px; text-align: left; color: #444; border-bottom: 2px solid #eee; position: sticky; top: 0; z-index: 2; }
-        tr:hover { background-color: #fcfcfc; }
-        td { padding: 12px; border-bottom: 1px solid #eee; }
+        .sidebar.collapsed { left: calc(var(--sidebar-w) * -1); }
+
+        .logo { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.3rem; color: var(--primary); margin-bottom: 2.5rem; }
+        nav { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+        nav a { text-decoration: none; color: var(--text-muted); padding: 0.8rem 1rem; border-radius: 10px; display: flex; align-items: center; gap: 12px; transition: var(--transition); font-weight: 500; }
+        nav a.active { background: #2563eb15; color: var(--primary); }
+        .spacer { flex-grow: 1; }
         
-        .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
-        .status-S { background: #dcfce7; color: var(--success); }
-        .status-N { background: #fee2e2; color: var(--danger); }
-        
-        .btn-delete { background: #fee2e2; color: var(--danger); padding: 5px 8px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; }
-        .op-badge { background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.75rem; border: 1px solid #e2e8f0; }
-        
-        #filtroTabela { width: 100%; padding: 15px; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; font-size: 1rem; outline: none; transition: 0.3s; }
-        #filtroTabela:focus { border-color: var(--primary); box-shadow: 0 0 8px rgba(0,86,179,0.2); }
-        
-        .highlight-filter { animation: pulse 1.5s infinite; border-color: var(--primary) !important; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 86, 179, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(0, 86, 179, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 86, 179, 0); } }
+        .nav-btn { background: var(--bg-app); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; justify-content: center; font-weight: 600; margin-bottom: 8px; transition: var(--transition); }
+
+        .main-content { 
+            margin-left: var(--sidebar-w); 
+            flex-grow: 1; 
+            padding: 2rem; 
+            width: calc(100% - var(--sidebar-w)); 
+            transition: var(--transition);
+        }
+
+        .main-content.expanded { margin-left: 0; width: 100%; }
+
+        .top-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; gap: 20px; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+
+        .btn-toggle-sidebar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card { background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border); padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .stat-card { display: flex; align-items: center; gap: 1.25rem; }
+        .stat-card .icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .icon.blue { background: #eff6ff; color: #1d4ed8; }
+        .icon.orange { background: #fff7ed; color: #c2410c; }
+        .icon.green { background: #f0fdf4; color: #15803d; }
+
+        .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-top: 1rem; }
+        .filters-grid input, .filters-grid select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-app); color: var(--text-main); font-size: 0.85rem; outline: none; }
+
+        .table-container { overflow-x: auto; border-radius: 12px; margin-top: 1.5rem; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; min-width: 1200px; background: var(--bg-card); table-layout: fixed; }
+        th { background: var(--bg-app); padding: 0.9rem; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border); }
+        td { padding: 1rem 0.9rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; word-wrap: break-word; }
+
+        th:nth-child(1) { width: 60px; }
+        th:nth-child(2) { width: 130px; }
+        th:nth-child(3) { width: 220px; }
+        th:nth-child(4) { width: 140px; }
+        th:nth-child(5) { width: 160px; }
+        th:nth-child(6) { width: 180px; }
+        th:nth-child(7) { width: auto; }
+        th:nth-child(8) { width: 110px; }
+        th:nth-child(9) { width: 100px; }
+
+        tr.row-opened td { background-color: #dcfce7 !important; color: #166534 !important; }
+        .txt-full { font-size: 0.8rem; line-height: 1.4; max-height: 120px; overflow-y: auto; padding-right: 5px; }
+
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 700; }
+        .badge-pending { background: #f1f5f9; color: #475569; }
+        .badge-opened { background: #166534; color: white; }
+
+        .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition); font-size: 0.8rem; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-danger { background: #fee2e2; color: var(--danger); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #1e293b; color: white; border-radius: 8px; transform: translateY(150%); transition: 0.3s; z-index: 1000; font-size: 0.85rem; }
+        .toast.show { transform: translateY(0); }
     </style>
 </head>
 <body>
+    
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="logo"><i class="fas fa-network-wired"></i><span>ISP Protocol</span></div>
+            <nav>
+                <a href="#" class="active"><i class="fas fa-columns"></i> <span>Painel</span></a>
+                <a href="#" onclick="exportExcel()"><i class="fas fa-file-export"></i> <span>Exportar</span></a>
+                <div class="spacer"></div>
+                <button class="nav-btn" onclick="toggleTheme()"><i class="fas fa-moon"></i> <span>Tema</span></button>
+            </nav>
+        </aside>
 
-<div class="container">
-    <div class="header">
-        <div>
-            <h2 style="margin:0">Relatório de Reagendamentos</h2>
-            <small id="statusMsg">Conectando...</small>
-        </div>
-        <div class="actions">
-            <input type="file" id="inputXlsx" accept=".xlsx" style="display:none">
-            <label for="inputXlsx" class="btn btn-upload">📁 Importar Excel</label>
-            <button onclick="baixarPNG('captureArea', 'Dashboard_Completo')" class="btn btn-download">📸 Salvar Dashboard</button>
-        </div>
+        <main class="main-content" id="main-content">
+            <header class="top-header">
+                <div class="header-left">
+                    <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                    <div>
+                        <h1>Controle de Reagendamentos</h1>
+                        <p style="color: var(--text-muted); font-size: 0.85rem">Filtragem: <strong>Código 153</strong></p>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-plus"></i> Importar Planilha
+                </button>
+                <input type="file" id="fileInput" hidden accept=".xlsx, .xls">
+            </header>
+
+            <section class="stats-grid">
+                <div class="card stat-card"><div class="icon blue"><i class="fas fa-users"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Total</span><h2 id="stat-total">0</h2></div></div>
+                <div class="card stat-card"><div class="icon orange"><i class="fas fa-clock"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Pendentes</span><h2 id="stat-pending">0</h2></div></div>
+                <div class="card stat-card"><div class="icon green"><i class="fas fa-check"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Abertos</span><h2 id="stat-opened">0</h2></div></div>
+            </section>
+
+            <section class="card">
+                <div class="filters-grid">
+                    <input type="text" id="fOS" placeholder="O.S..." onkeyup="applyFilters()">
+                    <input type="text" id="fCli" placeholder="Cliente..." onkeyup="applyFilters()">
+                    <input type="date" id="fDate" onchange="applyFilters()">
+                    <select id="fCity" onchange="applyFilters()"><option value="">Cidade</option></select>
+                    <select id="fServ" onchange="applyFilters()"><option value="">Serviço</option></select>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-outline" onclick="massMark(true)">Marcar Visíveis como Aberto</button>
+                    <button class="btn btn-outline" onclick="clearFilters()">Limpar Filtros</button>
+                </div>
+            </section>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>O.S</th>
+                            <th>Data/Hora</th>
+                            <th>Cliente</th>
+                            <th>Cidade</th>
+                            <th>Serviço</th>
+                            <th>Equipe</th>
+                            <th>Ocorrência Contrato</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </main>
     </div>
 
-    <div id="captureArea">
-        <div class="stats-grid">
-            <div class="stat-card"><h3>Total Geral</h3><div class="value" id="valTotal">0</div></div>
-            <div class="stat-card" style="color: var(--success)"><h3>Finalizados</h3><div class="value" id="valFin">0</div></div>
-            <div class="stat-card" style="color: var(--danger)"><h3>Pendentes</h3><div class="value" id="valPen">0</div></div>
-            <div class="stat-card" style="color: var(--primary)"><h3>Eficiência</h3><div class="value" id="valPerc">0%</div></div>
-        </div>
+    <div id="toast" class="toast"><span id="toast-msg"></span></div>
 
-        <div class="details-container">
-            <div class="box" id="boxMotivos">
-                <h4>Motivos <button class="btn-mini no-print" onclick="baixarBox('boxMotivos', 'Resumo_Motivos')">PNG</button></h4>
-                <div class="total-counter-box" id="countMotivos">TOTAL: 0</div>
-                <div id="listaMotivos"></div>
-            </div>
+    <script>
+        let allData = [];
+        let filteredData = [];
+        const STORAGE_KEY = 'isp_protocol_final_v1';
 
-            <div class="box" id="boxCidades">
-                <h4>Cidades <button class="btn-mini no-print" onclick="baixarBox('boxCidades', 'Resumo_Cidades')">PNG</button></h4>
-                <div class="total-counter-box" id="countCidades">TOTAL: 0</div>
-                <div id="listaCidades"></div>
-            </div>
-
-            <div class="box" id="boxBairros">
-                <h4>Bairros <button class="btn-mini no-print" onclick="baixarBox('boxBairros', 'Resumo_Bairros')">PNG</button></h4>
-                <div class="total-counter-box" id="countBairros">TOTAL: 0</div>
-                <div id="listaBairros"></div>
-            </div>
-        </div>
-
-        <input type="text" id="filtroTabela" placeholder="🔍 Clique em um motivo acima ou digite aqui para filtrar clientes...">
-
-        <table>
-            <thead>
-                <tr>
-                    <th>PROTOCOLO</th>
-                    <th>CLIENTE</th>
-                    <th>OP. ABERTURA</th>
-                    <th>LOCALIZAÇÃO</th>
-                    <th>MOTIVO</th>
-                    <th>STATUS</th>
-                    <th>DATA REAG.</th>
-                    <th class="no-print">AÇÕES</th>
-                </tr>
-            </thead>
-            <tbody id="corpoTabela"></tbody>
-        </table>
-    </div>
-</div>
-
-<script>
-    const BIN_ID = '699f4292d0ea881f40d922ac';
-    const API_KEY = '$2a$10$OCvV0EQunKhQKKTZBhUQ/.//aQrFwn6qeIzDL2qBCrX1jLMcKCDcy';
-    const URL_API = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-
-    let dadosAtuais = [];
-
-    window.onload = carregarDados;
-
-    async function carregarDados() {
-        try {
-            const response = await fetch(`${URL_API}/latest`, { headers: { 'X-Master-Key': API_KEY } });
-            const res = await response.json();
-            if (res.record && res.record.data) {
-                dadosAtuais = res.record.data;
-                ordenarPorNome();
-                renderizar();
-                updateStatusMsg("Sincronizado", "var(--success)");
-            }
-        } catch (err) {
-            updateStatusMsg("Erro de conexão", "var(--danger)");
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('main-content').classList.toggle('expanded');
         }
-    }
 
-    function updateStatusMsg(txt, color) {
-        const msg = document.getElementById('statusMsg');
-        msg.innerText = txt;
-        msg.style.color = color;
-    }
+        const SERVICOS_OK = [
+            "BL-Inspeção", "BL-Instalação", "BL-Manutenção", "BL-Mudança de Comodo",
+            "BL-Mudança de Comodato", "BL-Mudança de Endereço", "BL-Suporte",
+            "BL-Troca com Mudança", "CB-Intalação", "Mesh-Instalação",
+            "Mesh-Instalação sem troca", "Mesh-Instalação com troca",
+            "BL-Reativação de cliente suspenço"
+        ];
 
-    document.getElementById('inputXlsx').addEventListener('change', function(e) {
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const raw = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
-            dadosAtuais = raw.filter(row => row[2] && row[2] !== "Protocolo");
-            ordenarPorNome();
-            renderizar();
-            await salvarNaNuvem();
-        };
-        reader.readAsArrayBuffer(e.target.files[0]);
-    });
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    
+                    // ZERA OS DADOS ANTES DE IMPORTAR NOVOS
+                    allData = []; 
+                    
+                    allData = rows.filter(row => {
+                        const code = String(row['Código Encerramento'] || row['codigo_encerramento'] || '').trim();
+                        const tipo = String(row['Tipo de Serviço'] || row['tipo_servico'] || '').trim();
+                        return code === '153' && SERVICOS_OK.includes(tipo);
+                    }).map((row, index) => {
+                        const osOrig = String(row['cód o.s'] || row['os'] || '').trim();
+                        const dataB = row['Data Agendamento'] || row['data'] || '';
+                        return {
+                            os: osOrig || "##",
+                            id: `ID-${osOrig}-${row['Cliente']}-${index}`,
+                            dataStr: dataB ? formatDT(dataB) : '---',
+                            dataISO: dataB && !isNaN(new Date(dataB)) ? new Date(dataB).toISOString().split('T')[0] : '',
+                            cliente: row['Cliente'] || 'N/A',
+                            cidade: row['Cidade'] || 'N/A',
+                            tipo: row['Tipo de Serviço'] || 'N/A',
+                            equipe: row['Nome Equipe'] || row['equipe'] || 'N/A',
+                            ocorrencia: row['Ocorrência do Contrato'] || row['ocorrencia_contrato'] || '---'
+                        };
+                    });
+                    
+                    updateDrops();
+                    applyFilters();
+                    showToast(`Importado! Total de ${allData.length} registros encontrados.`);
+                } catch(err) { showToast("Erro na leitura!"); }
+            };
+            reader.readAsBinaryString(file);
+            this.value = ''; // Reseta o input para permitir importar o mesmo arquivo se necessário
+        });
 
-    function ordenarPorNome() {
-        dadosAtuais.sort((a, b) => (a[1] || "").toString().localeCompare((b[1] || "").toString()));
-    }
+        function clearFilters() {
+            document.getElementById('fOS').value = '';
+            document.getElementById('fCli').value = '';
+            document.getElementById('fDate').value = '';
+            document.getElementById('fCity').value = '';
+            document.getElementById('fServ').value = '';
+            applyFilters();
+        }
 
-    async function salvarNaNuvem() {
-        updateStatusMsg("Salvando...", "var(--warning)");
-        try {
-            await fetch(URL_API, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
-                body: JSON.stringify({ last_update: new Date().toLocaleString(), data: dadosAtuais })
+        function applyFilters() {
+            const os = document.getElementById('fOS').value.toLowerCase();
+            const cli = document.getElementById('fCli').value.toLowerCase();
+            const dt = document.getElementById('fDate').value;
+            const ci = document.getElementById('fCity').value;
+            const se = document.getElementById('fServ').value;
+
+            filteredData = allData.filter(i => {
+                return i.os.toLowerCase().includes(os) &&
+                       i.cliente.toLowerCase().includes(cli) &&
+                       (dt === "" || i.dataISO === dt) &&
+                       (ci === "" || i.cidade === ci) &&
+                       (se === "" || i.tipo === se);
             });
-            updateStatusMsg("Sincronizado", "var(--success)");
-        } catch (err) {}
-    }
-
-    async function toggleStatus(index) {
-        let status = (dadosAtuais[index][10] || 'N').toString().trim().toUpperCase();
-        dadosAtuais[index][10] = (status === 'S') ? 'N' : 'S';
-        renderizar();
-        await salvarNaNuvem();
-    }
-
-    function atualizarData(index, novaData) {
-        while(dadosAtuais[index].length < 12) dadosAtuais[index].push("");
-        dadosAtuais[index][11] = novaData;
-        salvarNaNuvem();
-    }
-
-    function apagarLinha(index) {
-        if (confirm("Excluir este registro?")) {
-            dadosAtuais.splice(index, 1);
-            renderizar();
-            salvarNaNuvem();
+            render();
         }
-    }
 
-    // FUNÇÃO DE FILTRO RÁPIDO AO CLICAR NA CAIXA
-    function filtrarPorTermo(termo) {
-        const input = document.getElementById('filtroTabela');
-        input.value = termo;
-        
-        // Executa a filtragem visual
-        executarFiltro(termo.toLowerCase());
-        
-        // Efeito visual de confirmação no input
-        input.classList.add('highlight-filter');
-        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => input.classList.remove('highlight-filter'), 2000);
-    }
+        function render() {
+            const tbody = document.getElementById('tableBody');
+            const opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            tbody.innerHTML = '';
 
-    function executarFiltro(busca) {
-        document.querySelectorAll('#corpoTabela tr').forEach(r => {
-            r.style.display = r.innerText.toLowerCase().includes(busca) ? "" : "none";
-        });
-    }
+            filteredData.forEach(item => {
+                const isDone = opened.includes(item.id);
+                const tr = document.createElement('tr');
+                if (isDone) tr.classList.add('row-opened');
 
-    function renderizar() {
-        let stats = { total: 0, fin: 0, pen: 0, motivos: {}, cidades: {}, bairros: {} };
-        let html = '';
+                tr.innerHTML = `
+                    <td><strong>${item.os}</strong></td>
+                    <td style="font-size:0.75rem">${item.dataStr}</td>
+                    <td>${item.cliente}</td>
+                    <td>${item.cidade}</td>
+                    <td>${item.tipo}</td>
+                    <td>${item.equipe}</td>
+                    <td><div class="txt-full">${item.ocorrencia}</div></td>
+                    <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${isDone ? 'ABERTO' : 'PENDENTE'}</span></td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggle('${item.id}')">
+                            <i class="fas ${isDone ? 'fa-undo' : 'fa-check'}"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            updateStats(opened);
+        }
 
-        dadosAtuais.forEach((row, index) => {
-            const protocolo = row[2] || '---';
-            const cliente = row[1] ? row[1].split('CPF:')[0].trim() : '---';
-            const op = row[4] || '---';
-            const cidade = row[6] || '---';
-            const bairro = row[7] || '---';
-            const motivo = row[9] || 'Outros';
-            const status = (row[10] || 'N').toString().trim().toUpperCase();
-            const dataReag = row[11] || '';
+        function toggle(id) {
+            let opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            opened = opened.includes(id) ? opened.filter(i => i !== id) : [...opened, id];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(opened));
+            render();
+        }
 
-            stats.total++;
-            status === 'S' ? stats.fin++ : stats.pen++;
-            stats.motivos[motivo] = (stats.motivos[motivo] || 0) + 1;
-            stats.cidades[cidade] = (stats.cidades[cidade] || 0) + 1;
-            stats.bairros[bairro] = (stats.bairros[bairro] || 0) + 1;
+        function massMark(shouldMark) {
+            if(filteredData.length === 0) return;
+            let opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            filteredData.forEach(i => { if(!opened.includes(i.id)) opened.push(i.id); });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(opened));
+            render();
+            showToast("Itens marcados!");
+        }
 
-            html += `<tr>
-                <td><strong>${protocolo}</strong></td>
-                <td style="text-transform: uppercase;">${cliente}</td>
-                <td><span class="op-badge">${op}</span></td>
-                <td><strong>${cidade}</strong><br><small>${bairro}</small></td>
-                <td><small>${motivo}</small></td>
-                <td>
-                    <span class="status-pill status-${status}" onclick="toggleStatus(${index})">
-                        ${status === 'S' ? '✅ FINALIZADO' : '⏳ PENDENTE'}
-                    </span>
-                </td>
-                <td><input type="date" class="input-data" value="${dataReag}" onchange="atualizarData(${index}, this.value)"></td>
-                <td class="no-print"><button class="btn-delete" onclick="apagarLinha(${index})">🗑️</button></td>
-            </tr>`;
-        });
+        function formatDT(d) {
+            const date = new Date(d);
+            return isNaN(date) ? d : date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+        }
 
-        document.getElementById('valTotal').innerText = stats.total;
-        document.getElementById('valFin').innerText = stats.fin;
-        document.getElementById('valPen').innerText = stats.pen;
-        document.getElementById('valPerc').innerText = stats.total > 0 ? Math.round((stats.fin/stats.total)*100)+'%' : '0%';
-        
-        document.getElementById('countMotivos').innerText = `TOTAL: ${stats.total}`;
-        document.getElementById('countCidades').innerText = `TOTAL: ${stats.total}`;
-        document.getElementById('countBairros').innerText = `TOTAL: ${stats.total}`;
+        function updateStats(openedList) {
+            const total = filteredData.length;
+            const opCount = filteredData.filter(i => openedList.includes(i.id)).length;
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-pending').innerText = total - opCount;
+            document.getElementById('stat-opened').innerText = opCount;
+        }
 
-        document.getElementById('corpoTabela').innerHTML = html;
-        preencherLista('listaMotivos', stats.motivos);
-        preencherLista('listaCidades', stats.cidades);
-        preencherLista('listaBairros', stats.bairros);
-    }
+        function updateDrops() {
+            const cities = [...new Set(allData.map(i => i.cidade))].sort();
+            const services = [...new Set(allData.map(i => i.tipo))].sort();
+            document.getElementById('fCity').innerHTML = '<option value="">Cidade</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('fServ').innerHTML = '<option value="">Serviço</option>' + services.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
 
-    function preencherLista(id, obj) {
-        const el = document.getElementById(id);
-        el.innerHTML = '';
-        Object.entries(obj).sort((a,b) => b[1]-a[1]).forEach(([k, v]) => {
-            // Adicionado evento de clique (onclick) em cada linha da lista
-            el.innerHTML += `<div class="list-row" onclick="filtrarPorTermo('${k}')"><span>${k}</span><span class="badge">${v}</span></div>`;
-        });
-    }
+        function exportExcel() {
+            const opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const data = allData.filter(i => !opened.includes(i.id));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Pendentes");
+            XLSX.writeFile(wb, "protocolos.xlsx");
+        }
 
-    function baixarBox(id, nome) {
-        const box = document.getElementById(id);
-        box.classList.add('box-capture');
-        html2canvas(box, { scale: 2, backgroundColor: "#ffffff" }).then(canvas => {
-            const link = document.createElement('a');
-            link.download = `${nome}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            box.classList.remove('box-capture');
-        });
-    }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+        }
 
-    function baixarPNG(id, nome) {
-        const ui = document.querySelectorAll('.no-print, #filtroTabela');
-        ui.forEach(el => el.style.display = 'none');
-        html2canvas(document.getElementById(id), { scale: 2, backgroundColor: '#f0f2f5' }).then(canvas => {
-            const link = document.createElement('a');
-            link.download = `${nome}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            ui.forEach(el => el.style.display = '');
-        });
-    }
-
-    document.getElementById('filtroTabela').addEventListener('keyup', function() {
-        executarFiltro(this.value.toLowerCase());
-    });
-</script>
+        function showToast(m) { 
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = m;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+    </script>
 </body>
 </html>
