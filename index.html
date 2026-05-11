@@ -162,7 +162,7 @@
                     <select id="fServ" onchange="applyFilters()"><option value="">Serviço</option></select>
                 </div>
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="btn btn-outline" onclick="massMark(true)">Marcar Visíveis como Aberto</button>
+                    <button class="btn btn-outline" onclick="massMark()">Marcar Visíveis como Aberto</button>
                     <button class="btn btn-outline" onclick="clearFilters()">Limpar Filtros</button>
                 </div>
             </section>
@@ -193,31 +193,21 @@
     <script>
         const MASTER_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
         const BIN_ID = "696fe1e1ae596e708fe97dbb";
-        const DATA_STORAGE = 'isp_data_full_v1';
-        const STATUS_STORAGE = 'isp_status_v1';
 
         let allData = [];
         let filteredData = [];
 
-        // LISTA DE SERVIÇOS ATUALIZADA
         const SERVICOS_PERMITIDOS = [
-            "BL-Inspeção",
-            "BL-Instalação",
-            "BL-Manutenção",
-            "BL-Mudança de Comodo",
-            "BL-Mudança de Comodato",
-            "BL-Mudança de Endereço",
-            "BL-Suporte",
-            "BL-Troca com Mudança",
-            "CB-Intalação",
-            "Mesh-Instalação",
-            "Mesh-Instalação sem troca",
-            "Mesh-Instalação com troca",
+            "BL-Inspeção", "BL-Instalação", "BL-Manutenção", "BL-Mudança de Comodo",
+            "BL-Mudança de Comodato", "BL-Mudança de Endereço", "BL-Suporte",
+            "BL-Troca com Mudança", "CB-Intalação", "Mesh-Instalação",
+            "Mesh-Instalação sem troca", "Mesh-Instalação com troca",
             "BL-Reativação de cliente suspenço"
         ];
 
         window.onload = () => { syncFromCloud(); };
 
+        // SINCRONIZAÇÃO: PUXA DADOS E STATUS DA NUVEM
         async function syncFromCloud() {
             document.getElementById('cloud-status').innerText = "Sincronizando...";
             try {
@@ -226,20 +216,24 @@
                 });
                 const data = await res.json();
                 if (data.record) {
-                    allData = Array.isArray(data.record) ? data.record : [];
-                    localStorage.setItem(DATA_STORAGE, JSON.stringify(allData));
+                    // Se o registro for um array, converte para o novo formato de objeto
+                    if (Array.isArray(data.record)) {
+                        allData = data.record.map(item => ({...item, status: item.status || 'PENDENTE'}));
+                    } else {
+                        allData = data.record.items || [];
+                    }
                     document.getElementById('cloud-status').innerText = "Online (Sincronizado)";
                     updateDrops();
                     applyFilters();
                 }
             } catch (e) {
-                document.getElementById('cloud-status').innerText = "Offline (Local)";
-                const saved = localStorage.getItem(DATA_STORAGE);
-                if (saved) { allData = JSON.parse(saved); applyFilters(); }
+                document.getElementById('cloud-status').innerText = "Erro na Nuvem";
+                showToast("Erro ao conectar com a nuvem.");
             }
         }
 
-        async function syncToCloud(dataToSave) {
+        // SALVA TUDO (ITENS + STATUS) NA NUVEM
+        async function syncToCloud() {
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                     method: 'PUT',
@@ -247,10 +241,12 @@
                         'Content-Type': 'application/json',
                         'X-Master-Key': MASTER_KEY
                     },
-                    body: JSON.stringify(dataToSave)
+                    body: JSON.stringify({ items: allData })
                 });
-                showToast("Dados atualizados na nuvem!");
-            } catch (e) { showToast("Erro ao sincronizar nuvem."); }
+                showToast("Sincronizado com sucesso!");
+            } catch (e) {
+                showToast("Erro ao salvar na nuvem.");
+            }
         }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -276,16 +272,13 @@
                         cidade: row['Cidade'] || 'N/A',
                         tipo: row['Tipo de Serviço'] || 'N/A',
                         equipe: row['Nome Equipe'] || 'N/A',
-                        ocorrencia: row['Ocorrência do Contrato'] || '---'
+                        ocorrencia: row['Ocorrência do Contrato'] || '---',
+                        status: 'PENDENTE' // Status inicial padrão
                     }));
                     
                     allData = newData;
-                    localStorage.setItem(DATA_STORAGE, JSON.stringify(allData));
-                    await syncToCloud(allData); 
-                    
-                    updateDrops();
+                    await syncToCloud(); 
                     applyFilters();
-                    showToast(`Importado! ${allData.length} registros válidos.`);
                 } catch(err) { showToast("Erro no arquivo!"); }
             };
             reader.readAsBinaryString(file);
@@ -311,11 +304,10 @@
 
         function render() {
             const tbody = document.getElementById('tableBody');
-            const opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
             tbody.innerHTML = '';
 
             filteredData.forEach(item => {
-                const isDone = opened.includes(item.id);
+                const isDone = item.status === 'ABERTO';
                 const tr = document.createElement('tr');
                 if (isDone) tr.classList.add('row-opened');
 
@@ -327,40 +319,35 @@
                     <td>${item.tipo}</td>
                     <td>${item.equipe}</td>
                     <td><div class="txt-full">${item.ocorrencia}</div></td>
-                    <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${isDone ? 'ABERTO' : 'PENDENTE'}</span></td>
+                    <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${item.status}</span></td>
                     <td style="text-align: right;">
-                        <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggle('${item.id}')">
+                        <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggleStatus('${item.id}')">
                             <i class="fas ${isDone ? 'fa-undo' : 'fa-check'}"></i>
                         </button>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
-            updateStats(opened);
+            updateStats();
         }
 
-        function toggle(id) {
-            let opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
-            opened = opened.includes(id) ? opened.filter(i => i !== id) : [...opened, id];
-            localStorage.setItem(STATUS_STORAGE, JSON.stringify(opened));
-            render();
-        }
-
-        function massMark(shouldMark) {
-            let opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
-            filteredData.forEach(i => { if(!opened.includes(i.id)) opened.push(i.id); });
-            localStorage.setItem(STATUS_STORAGE, JSON.stringify(opened));
-            render();
-        }
-
-        function limparTudo() {
-            if(confirm("Zerar todos os dados? Isso apagará a nuvem também.")) {
-                allData = [];
-                localStorage.removeItem(DATA_STORAGE);
-                localStorage.removeItem(STATUS_STORAGE);
-                syncToCloud([]);
-                location.reload();
+        // ALTERA O STATUS E JOGA PARA A NUVEM IMEDIATAMENTE
+        async function toggleStatus(id) {
+            const index = allData.findIndex(item => item.id === id);
+            if (index !== -1) {
+                allData[index].status = allData[index].status === 'ABERTO' ? 'PENDENTE' : 'ABERTO';
+                render();
+                await syncToCloud(); // Salva na nuvem para os outros verem
             }
+        }
+
+        async function massMark() {
+            filteredData.forEach(item => {
+                const index = allData.findIndex(i => i.id === item.id);
+                if (index !== -1) allData[index].status = 'ABERTO';
+            });
+            render();
+            await syncToCloud();
         }
 
         function formatDT(d) {
@@ -368,9 +355,9 @@
             return isNaN(date) ? d : date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
         }
 
-        function updateStats(openedList) {
-            const total = filteredData.length;
-            const opCount = filteredData.filter(i => openedList.includes(i.id)).length;
+        function updateStats() {
+            const total = allData.length;
+            const opCount = allData.filter(i => i.status === 'ABERTO').length;
             document.getElementById('stat-total').innerText = total;
             document.getElementById('stat-pending').innerText = total - opCount;
             document.getElementById('stat-opened').innerText = opCount;
@@ -388,6 +375,14 @@
             document.getElementById('toast-msg').innerText = m;
             t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function limparTudo() {
+            if(confirm("Zerar todos os dados na nuvem?")) {
+                allData = [];
+                syncToCloud();
+                render();
+            }
         }
 
         function toggleSidebar() {
