@@ -191,22 +191,33 @@
     <div id="toast" class="toast"><span id="toast-msg"></span></div>
 
     <script>
-        // CHAVES DE ACESSO FORNECIDAS
         const MASTER_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
         const BIN_ID = "696fe1e1ae596e708fe97dbb";
-
         const DATA_STORAGE = 'isp_data_full_v1';
         const STATUS_STORAGE = 'isp_status_v1';
 
         let allData = [];
         let filteredData = [];
 
-        // AO INICIAR: Tenta carregar da Nuvem primeiro
-        window.onload = () => {
-            syncFromCloud();
-        };
+        // LISTA DE SERVIÇOS ATUALIZADA
+        const SERVICOS_PERMITIDOS = [
+            "BL-Inspeção",
+            "BL-Instalação",
+            "BL-Manutenção",
+            "BL-Mudança de Comodo",
+            "BL-Mudança de Comodato",
+            "BL-Mudança de Endereço",
+            "BL-Suporte",
+            "BL-Troca com Mudança",
+            "CB-Intalação",
+            "Mesh-Instalação",
+            "Mesh-Instalação sem troca",
+            "Mesh-Instalação com troca",
+            "BL-Reativação de cliente suspenço"
+        ];
 
-        // FUNÇÃO PARA BUSCAR DA NUVEM (JSONBin)
+        window.onload = () => { syncFromCloud(); };
+
         async function syncFromCloud() {
             document.getElementById('cloud-status').innerText = "Sincronizando...";
             try {
@@ -214,8 +225,8 @@
                     headers: { 'X-Master-Key': MASTER_KEY }
                 });
                 const data = await res.json();
-                if (data.record && Array.isArray(data.record)) {
-                    allData = data.record;
+                if (data.record) {
+                    allData = Array.isArray(data.record) ? data.record : [];
                     localStorage.setItem(DATA_STORAGE, JSON.stringify(allData));
                     document.getElementById('cloud-status').innerText = "Online (Sincronizado)";
                     updateDrops();
@@ -224,14 +235,10 @@
             } catch (e) {
                 document.getElementById('cloud-status').innerText = "Offline (Local)";
                 const saved = localStorage.getItem(DATA_STORAGE);
-                if (saved) {
-                    allData = JSON.parse(saved);
-                    applyFilters();
-                }
+                if (saved) { allData = JSON.parse(saved); applyFilters(); }
             }
         }
 
-        // FUNÇÃO PARA ENVIAR PARA A NUVEM
         async function syncToCloud(dataToSave) {
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -242,10 +249,8 @@
                     },
                     body: JSON.stringify(dataToSave)
                 });
-                showToast("Dados salvos na nuvem!");
-            } catch (e) {
-                showToast("Erro ao salvar na nuvem.");
-            }
+                showToast("Dados atualizados na nuvem!");
+            } catch (e) { showToast("Erro ao sincronizar nuvem."); }
         }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -260,10 +265,11 @@
                     
                     const newData = rows.filter(row => {
                         const code = String(row['Código Encerramento'] || row['codigo_encerramento'] || '').trim();
-                        return code === '153';
+                        const servico = String(row['Tipo de Serviço'] || row['tipo_servico'] || '').trim();
+                        return code === '153' && SERVICOS_PERMITIDOS.includes(servico);
                     }).map((row, index) => ({
                         os: String(row['cód o.s'] || row['os'] || '').trim() || "##",
-                        id: `ID-${row['Cliente']}-${index}`,
+                        id: `ID-${row['Cliente']}-${index}-${Date.now()}`,
                         dataStr: row['Data Agendamento'] ? formatDT(row['Data Agendamento']) : '---',
                         dataISO: row['Data Agendamento'] ? new Date(row['Data Agendamento']).toISOString().split('T')[0] : '',
                         cliente: row['Cliente'] || 'N/A',
@@ -275,13 +281,15 @@
                     
                     allData = newData;
                     localStorage.setItem(DATA_STORAGE, JSON.stringify(allData));
-                    await syncToCloud(allData); // Envia para a nuvem para o outro colaborador ver
+                    await syncToCloud(allData); 
                     
                     updateDrops();
                     applyFilters();
+                    showToast(`Importado! ${allData.length} registros válidos.`);
                 } catch(err) { showToast("Erro no arquivo!"); }
             };
             reader.readAsBinaryString(file);
+            this.value = '';
         });
 
         function applyFilters() {
@@ -345,6 +353,16 @@
             render();
         }
 
+        function limparTudo() {
+            if(confirm("Zerar todos os dados? Isso apagará a nuvem também.")) {
+                allData = [];
+                localStorage.removeItem(DATA_STORAGE);
+                localStorage.removeItem(STATUS_STORAGE);
+                syncToCloud([]);
+                location.reload();
+            }
+        }
+
         function formatDT(d) {
             const date = new Date(d);
             return isNaN(date) ? d : date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
@@ -372,7 +390,28 @@
             setTimeout(() => t.classList.remove('show'), 3000);
         }
 
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('main-content').classList.toggle('expanded');
+        }
+
         function toggleTheme() { document.body.classList.toggle('dark-mode'); }
+
+        function clearFilters() {
+            document.getElementById('fOS').value = '';
+            document.getElementById('fCli').value = '';
+            document.getElementById('fDate').value = '';
+            document.getElementById('fCity').value = '';
+            document.getElementById('fServ').value = '';
+            applyFilters();
+        }
+
+        function exportExcel() {
+            const ws = XLSX.utils.json_to_sheet(allData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Dados");
+            XLSX.writeFile(wb, "Controle_ISP.xlsx");
+        }
     </script>
 </body>
 </html>
