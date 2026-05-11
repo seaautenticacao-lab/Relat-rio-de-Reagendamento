@@ -84,7 +84,6 @@
             align-items: center;
             justify-content: center;
             font-size: 1.2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
@@ -103,16 +102,6 @@
         th { background: var(--bg-app); padding: 0.9rem; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border); }
         td { padding: 1rem 0.9rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; word-wrap: break-word; }
 
-        th:nth-child(1) { width: 60px; }
-        th:nth-child(2) { width: 130px; }
-        th:nth-child(3) { width: 220px; }
-        th:nth-child(4) { width: 140px; }
-        th:nth-child(5) { width: 160px; }
-        th:nth-child(6) { width: 180px; }
-        th:nth-child(7) { width: auto; }
-        th:nth-child(8) { width: 110px; }
-        th:nth-child(9) { width: 100px; }
-
         tr.row-opened td { background-color: #dcfce7 !important; color: #166534 !important; }
         .txt-full { font-size: 0.8rem; line-height: 1.4; max-height: 120px; overflow-y: auto; padding-right: 5px; }
 
@@ -123,6 +112,7 @@
         .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition); font-size: 0.8rem; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-danger { background: #fee2e2; color: var(--danger); border: 1px solid #fecaca; }
 
         .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #1e293b; color: white; border-radius: 8px; transform: translateY(150%); transition: 0.3s; z-index: 1000; font-size: 0.85rem; }
         .toast.show { transform: translateY(0); }
@@ -137,6 +127,7 @@
                 <a href="#" class="active"><i class="fas fa-columns"></i> <span>Painel</span></a>
                 <a href="#" onclick="exportExcel()"><i class="fas fa-file-export"></i> <span>Exportar</span></a>
                 <div class="spacer"></div>
+                <button class="nav-btn" onclick="limparTudo()"><i class="fas fa-trash-alt"></i> <span>Zerar Banco</span></button>
                 <button class="nav-btn" onclick="toggleTheme()"><i class="fas fa-moon"></i> <span>Tema</span></button>
             </nav>
         </aside>
@@ -147,7 +138,7 @@
                     <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
                     <div>
                         <h1>Controle de Reagendamentos</h1>
-                        <p style="color: var(--text-muted); font-size: 0.85rem">Filtragem: <strong>Código 153</strong></p>
+                        <p style="color: var(--text-muted); font-size: 0.85rem">Status: <strong>Online</strong></p>
                     </div>
                 </div>
                 <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
@@ -180,15 +171,15 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>O.S</th>
-                            <th>Data/Hora</th>
-                            <th>Cliente</th>
-                            <th>Cidade</th>
-                            <th>Serviço</th>
-                            <th>Equipe</th>
-                            <th>Ocorrência Contrato</th>
-                            <th>Status</th>
-                            <th style="text-align: right;">Ação</th>
+                            <th style="width: 80px;">O.S</th>
+                            <th style="width: 140px;">Data/Hora</th>
+                            <th style="width: 250px;">Cliente</th>
+                            <th style="width: 150px;">Cidade</th>
+                            <th style="width: 180px;">Serviço</th>
+                            <th style="width: 180px;">Equipe</th>
+                            <th style="width: auto;">Ocorrência</th>
+                            <th style="width: 120px;">Status</th>
+                            <th style="width: 80px; text-align: right;">Ação</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -200,13 +191,26 @@
     <div id="toast" class="toast"><span id="toast-msg"></span></div>
 
     <script>
-        // CONFIGURAÇÕES DE CHAVES SOLICITADAS
+        // CHAVES DE ACESSO
         const MASTER_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
         const BIN_KEY = "696fe1e1ae596e708fe97dbb";
 
+        // CHAVES DO STORAGE
+        const DATA_STORAGE = 'isp_data_full_v1';
+        const STATUS_STORAGE = 'isp_status_v1';
+
         let allData = [];
         let filteredData = [];
-        const STORAGE_KEY = 'isp_protocol_final_v1';
+
+        // CARREGA DADOS AO INICIAR
+        window.onload = () => {
+            const saved = localStorage.getItem(DATA_STORAGE);
+            if (saved) {
+                allData = JSON.parse(saved);
+                updateDrops();
+                applyFilters();
+            }
+        };
 
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
@@ -231,10 +235,7 @@
                     const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
                     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     
-                    // Limpeza total de memória antes de processar
-                    allData = []; 
-                    
-                    allData = rows.filter(row => {
+                    const newData = rows.filter(row => {
                         const code = String(row['Código Encerramento'] || row['codigo_encerramento'] || '').trim();
                         const tipo = String(row['Tipo de Serviço'] || row['tipo_servico'] || '').trim();
                         return code === '153' && SERVICOS_OK.includes(tipo);
@@ -254,23 +255,18 @@
                         };
                     });
                     
+                    allData = newData;
+                    // SALVA NO NAVEGADOR PARA NÃO SUMIR AO ATUALIZAR
+                    localStorage.setItem(DATA_STORAGE, JSON.stringify(allData));
+                    
                     updateDrops();
                     applyFilters();
-                    showToast(`Importado! ${allData.length} registros novos carregados.`);
+                    showToast(`Sucesso! ${allData.length} itens salvos.`);
                 } catch(err) { showToast("Erro na leitura!"); }
             };
             reader.readAsBinaryString(file);
             this.value = '';
         });
-
-        function clearFilters() {
-            document.getElementById('fOS').value = '';
-            document.getElementById('fCli').value = '';
-            document.getElementById('fDate').value = '';
-            document.getElementById('fCity').value = '';
-            document.getElementById('fServ').value = '';
-            applyFilters();
-        }
 
         function applyFilters() {
             const os = document.getElementById('fOS').value.toLowerCase();
@@ -291,7 +287,7 @@
 
         function render() {
             const tbody = document.getElementById('tableBody');
-            const opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
             tbody.innerHTML = '';
 
             filteredData.forEach(item => {
@@ -301,7 +297,7 @@
 
                 tr.innerHTML = `
                     <td><strong>${item.os}</strong></td>
-                    <td style="font-size:0.75rem">${item.dataStr}</td>
+                    <td>${item.dataStr}</td>
                     <td>${item.cliente}</td>
                     <td>${item.cidade}</td>
                     <td>${item.tipo}</td>
@@ -310,7 +306,7 @@
                     <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${isDone ? 'ABERTO' : 'PENDENTE'}</span></td>
                     <td style="text-align: right;">
                         <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggle('${item.id}')">
-                            ${isDone ? 'Desfazer' : 'Abrir'}
+                            <i class="fas ${isDone ? 'fa-undo' : 'fa-check'}"></i>
                         </button>
                     </td>
                 `;
@@ -320,19 +316,27 @@
         }
 
         function toggle(id) {
-            let opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            let opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
             opened = opened.includes(id) ? opened.filter(i => i !== id) : [...opened, id];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(opened));
+            localStorage.setItem(STATUS_STORAGE, JSON.stringify(opened));
             render();
         }
 
         function massMark(shouldMark) {
-            if(filteredData.length === 0) return;
-            let opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            let opened = JSON.parse(localStorage.getItem(STATUS_STORAGE) || '[]');
             filteredData.forEach(i => { if(!opened.includes(i.id)) opened.push(i.id); });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(opened));
+            localStorage.setItem(STATUS_STORAGE, JSON.stringify(opened));
             render();
-            showToast("Itens marcados!");
+        }
+
+        function limparTudo() {
+            if(confirm("Deseja apagar todos os dados salvos?")) {
+                localStorage.removeItem(DATA_STORAGE);
+                localStorage.removeItem(STATUS_STORAGE);
+                allData = [];
+                render();
+                location.reload();
+            }
         }
 
         function formatDT(d) {
@@ -353,19 +357,6 @@
             const services = [...new Set(allData.map(i => i.tipo))].sort();
             document.getElementById('fCity').innerHTML = '<option value="">Cidade</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
             document.getElementById('fServ').innerHTML = '<option value="">Serviço</option>' + services.map(s => `<option value="${s}">${s}</option>`).join('');
-        }
-
-        function exportExcel() {
-            const opened = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-            const data = allData.filter(i => !opened.includes(i.id));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Pendentes");
-            XLSX.writeFile(wb, "protocolos.xlsx");
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
         }
 
         function showToast(m) { 
