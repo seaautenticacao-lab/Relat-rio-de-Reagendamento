@@ -207,7 +207,6 @@
 
         window.onload = () => { syncFromCloud(); };
 
-        // SINCRONIZAÇÃO: PUXA DADOS E STATUS DA NUVEM
         async function syncFromCloud() {
             document.getElementById('cloud-status').innerText = "Sincronizando...";
             try {
@@ -216,23 +215,17 @@
                 });
                 const data = await res.json();
                 if (data.record) {
-                    // Se o registro for um array, converte para o novo formato de objeto
-                    if (Array.isArray(data.record)) {
-                        allData = data.record.map(item => ({...item, status: item.status || 'PENDENTE'}));
-                    } else {
-                        allData = data.record.items || [];
-                    }
+                    allData = data.record.items || (Array.isArray(data.record) ? data.record : []);
                     document.getElementById('cloud-status').innerText = "Online (Sincronizado)";
                     updateDrops();
                     applyFilters();
                 }
             } catch (e) {
                 document.getElementById('cloud-status').innerText = "Erro na Nuvem";
-                showToast("Erro ao conectar com a nuvem.");
+                showToast("Erro ao carregar dados.");
             }
         }
 
-        // SALVA TUDO (ITENS + STATUS) NA NUVEM
         async function syncToCloud() {
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -243,10 +236,8 @@
                     },
                     body: JSON.stringify({ items: allData })
                 });
-                showToast("Sincronizado com sucesso!");
-            } catch (e) {
-                showToast("Erro ao salvar na nuvem.");
-            }
+                showToast("Nuvem Atualizada!");
+            } catch (e) { showToast("Erro ao salvar."); }
         }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -259,25 +250,40 @@
                     const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
                     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     
+                    // CRIAR MAPA DOS STATUS ATUAIS PARA PRESERVAR
+                    const statusMap = {};
+                    allData.forEach(item => {
+                        const key = `${item.os}-${item.cliente}`.trim();
+                        statusMap[key] = item.status;
+                    });
+
                     const newData = rows.filter(row => {
                         const code = String(row['Código Encerramento'] || row['codigo_encerramento'] || '').trim();
                         const servico = String(row['Tipo de Serviço'] || row['tipo_servico'] || '').trim();
                         return code === '153' && SERVICOS_PERMITIDOS.includes(servico);
-                    }).map((row, index) => ({
-                        os: String(row['cód o.s'] || row['os'] || '').trim() || "##",
-                        id: `ID-${row['Cliente']}-${index}-${Date.now()}`,
-                        dataStr: row['Data Agendamento'] ? formatDT(row['Data Agendamento']) : '---',
-                        dataISO: row['Data Agendamento'] ? new Date(row['Data Agendamento']).toISOString().split('T')[0] : '',
-                        cliente: row['Cliente'] || 'N/A',
-                        cidade: row['Cidade'] || 'N/A',
-                        tipo: row['Tipo de Serviço'] || 'N/A',
-                        equipe: row['Nome Equipe'] || 'N/A',
-                        ocorrencia: row['Ocorrência do Contrato'] || '---',
-                        status: 'PENDENTE' // Status inicial padrão
-                    }));
+                    }).map((row, index) => {
+                        const os = String(row['cód o.s'] || row['os'] || '').trim();
+                        const cliente = row['Cliente'] || 'N/A';
+                        const key = `${os}-${cliente}`.trim();
+
+                        return {
+                            os: os || "##",
+                            id: `ID-${os}-${cliente}-${index}`,
+                            dataStr: row['Data Agendamento'] ? formatDT(row['Data Agendamento']) : '---',
+                            dataISO: row['Data Agendamento'] ? new Date(row['Data Agendamento']).toISOString().split('T')[0] : '',
+                            cliente: cliente,
+                            cidade: row['Cidade'] || 'N/A',
+                            tipo: row['Tipo de Serviço'] || 'N/A',
+                            equipe: row['Nome Equipe'] || 'N/A',
+                            ocorrencia: row['Ocorrência do Contrato'] || '---',
+                            // PRESERVAÇÃO: Se já existia e estava ABERTO, mantém ABERTO. Senão, PENDENTE.
+                            status: statusMap[key] === 'ABERTO' ? 'ABERTO' : 'PENDENTE'
+                        };
+                    });
                     
                     allData = newData;
                     await syncToCloud(); 
+                    updateDrops();
                     applyFilters();
                 } catch(err) { showToast("Erro no arquivo!"); }
             };
@@ -331,13 +337,12 @@
             updateStats();
         }
 
-        // ALTERA O STATUS E JOGA PARA A NUVEM IMEDIATAMENTE
         async function toggleStatus(id) {
             const index = allData.findIndex(item => item.id === id);
             if (index !== -1) {
                 allData[index].status = allData[index].status === 'ABERTO' ? 'PENDENTE' : 'ABERTO';
                 render();
-                await syncToCloud(); // Salva na nuvem para os outros verem
+                await syncToCloud();
             }
         }
 
@@ -378,10 +383,10 @@
         }
 
         function limparTudo() {
-            if(confirm("Zerar todos os dados na nuvem?")) {
+            if(confirm("Zerar todos os dados?")) {
                 allData = [];
                 syncToCloud();
-                render();
+                location.reload();
             }
         }
 
@@ -393,11 +398,7 @@
         function toggleTheme() { document.body.classList.toggle('dark-mode'); }
 
         function clearFilters() {
-            document.getElementById('fOS').value = '';
-            document.getElementById('fCli').value = '';
-            document.getElementById('fDate').value = '';
-            document.getElementById('fCity').value = '';
-            document.getElementById('fServ').value = '';
+            document.querySelectorAll('.filters-grid input, .filters-grid select').forEach(el => el.value = '');
             applyFilters();
         }
 
