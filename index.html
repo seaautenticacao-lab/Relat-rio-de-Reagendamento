@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocol Control | ISP System</title>
+    <title>Protocol Control | ISP System Real-Time</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -124,7 +124,7 @@
             <div class="logo"><i class="fas fa-network-wired"></i><span>ISP Protocol</span></div>
             <nav>
                 <a href="#" class="active"><i class="fas fa-columns"></i> <span>Painel</span></a>
-                <a href="#" onclick="syncFromCloud()"><i class="fas fa-sync"></i> <span>Sincronizar Nuvem</span></a>
+                <a href="#" onclick="syncFromCloud()"><i class="fas fa-sync"></i> <span>Sincronizar Agora</span></a>
                 <a href="#" onclick="exportExcel()"><i class="fas fa-file-export"></i> <span>Exportar</span></a>
                 <div class="spacer"></div>
                 <button class="nav-btn" onclick="limparTudo()"><i class="fas fa-trash-alt"></i> <span>Zerar Banco</span></button>
@@ -138,7 +138,7 @@
                     <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
                     <div>
                         <h1>Controle de Reagendamentos</h1>
-                        <p style="color: var(--text-muted); font-size: 0.85rem">Status: <strong id="cloud-status">Verificando...</strong></p>
+                        <p style="color: var(--text-muted); font-size: 0.85rem">Atualização automática ativada | Status: <strong id="cloud-status">Verificando...</strong></p>
                     </div>
                 </div>
                 <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
@@ -205,24 +205,32 @@
             "BL-Reativação de cliente suspenço"
         ];
 
-        window.onload = () => { syncFromCloud(); };
+        window.onload = () => { 
+            syncFromCloud(); 
+            // Inicia o Polling: verifica novos dados a cada 15 segundos
+            setInterval(syncFromCloud, 15000);
+        };
 
         async function syncFromCloud() {
-            document.getElementById('cloud-status').innerText = "Sincronizando...";
+            const statusEl = document.getElementById('cloud-status');
             try {
                 const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                     headers: { 'X-Master-Key': MASTER_KEY }
                 });
                 const data = await res.json();
                 if (data.record) {
-                    allData = data.record.items || (Array.isArray(data.record) ? data.record : []);
-                    document.getElementById('cloud-status').innerText = "Online (Sincronizado)";
-                    updateDrops();
-                    applyFilters();
+                    const incomingData = data.record.items || (Array.isArray(data.record) ? data.record : []);
+                    
+                    // Só renderiza se os dados na nuvem forem diferentes dos locais
+                    if (JSON.stringify(allData) !== JSON.stringify(incomingData)) {
+                        allData = incomingData;
+                        updateDrops();
+                        applyFilters();
+                    }
+                    statusEl.innerText = "Online (Sincronizado)";
                 }
             } catch (e) {
-                document.getElementById('cloud-status').innerText = "Erro na Nuvem";
-                showToast("Erro ao carregar dados.");
+                statusEl.innerText = "Erro na Nuvem";
             }
         }
 
@@ -250,7 +258,6 @@
                     const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
                     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     
-                    // CRIAR MAPA DOS STATUS ATUAIS PARA PRESERVAR
                     const statusMap = {};
                     allData.forEach(item => {
                         const key = `${item.os}-${item.cliente}`.trim();
@@ -276,7 +283,6 @@
                             tipo: row['Tipo de Serviço'] || 'N/A',
                             equipe: row['Nome Equipe'] || 'N/A',
                             ocorrencia: row['Ocorrência do Contrato'] || '---',
-                            // PRESERVAÇÃO: Se já existia e estava ABERTO, mantém ABERTO. Senão, PENDENTE.
                             status: statusMap[key] === 'ABERTO' ? 'ABERTO' : 'PENDENTE'
                         };
                     });
@@ -383,7 +389,7 @@
         }
 
         function limparTudo() {
-            if(confirm("Zerar todos os dados?")) {
+            if(confirm("Zerar todos os dados da nuvem? Isso apagará para todos os colaboradores.")) {
                 allData = [];
                 syncToCloud();
                 location.reload();
@@ -406,7 +412,7 @@
             const ws = XLSX.utils.json_to_sheet(allData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Dados");
-            XLSX.writeFile(wb, "Controle_ISP.xlsx");
+            XLSX.writeFile(wb, "Controle_ISP_Geral.xlsx");
         }
     </script>
 </body>
