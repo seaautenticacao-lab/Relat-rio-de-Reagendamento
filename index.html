@@ -20,6 +20,8 @@
             --border: #e2e8f0;
             --sidebar-w: 260px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --row-opened: #dcfce7;
+            --text-opened: #166534;
         }
 
         .dark-mode {
@@ -28,6 +30,8 @@
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --border: #334155;
+            --row-opened: #064e3b;
+            --text-opened: #a7f3d0;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
@@ -102,7 +106,7 @@
         th { background: var(--bg-app); padding: 0.9rem; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border); }
         td { padding: 1rem 0.9rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; word-wrap: break-word; }
 
-        tr.row-opened td { background-color: #dcfce7 !important; color: #166534 !important; }
+        tr.row-opened td { background-color: var(--row-opened) !important; color: var(--text-opened) !important; }
         .txt-full { font-size: 0.8rem; line-height: 1.4; max-height: 120px; overflow-y: auto; padding-right: 5px; }
 
         .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 700; }
@@ -115,6 +119,12 @@
 
         .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #1e293b; color: white; border-radius: 8px; transform: translateY(150%); transition: 0.3s; z-index: 1000; font-size: 0.85rem; }
         .toast.show { transform: translateY(0); }
+
+        @media (max-width: 768px) {
+            .sidebar { left: calc(var(--sidebar-w) * -1); }
+            .sidebar.active { left: 0; }
+            .main-content { margin-left: 0; width: 100%; }
+        }
     </style>
 </head>
 <body>
@@ -171,7 +181,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 80px;">O.S</th>
+                            <th style="width: 110px;">O.S</th>
                             <th style="width: 140px;">Data/Hora</th>
                             <th style="width: 250px;">Cliente</th>
                             <th style="width: 150px;">Cidade</th>
@@ -196,47 +206,40 @@
 
         let allData = [];
         let filteredData = [];
-
-        const SERVICOS_PERMITIDOS = [
-            "BL-Inspeção", "BL-Instalação", "BL-Manutenção", "BL-Mudança de Comodo",
-            "BL-Mudança de Comodato", "BL-Mudança de Endereço", "BL-Suporte",
-            "BL-Troca com Mudança", "CB-Intalação", "Mesh-Instalação",
-            "Mesh-Instalação sem troca", "Mesh-Instalação com troca",
-            "BL-Reativação de cliente suspenço"
-        ];
+        let isSyncing = false;
 
         window.onload = () => { 
             syncFromCloud(); 
-            // Inicia o Polling: verifica novos dados a cada 15 segundos
             setInterval(syncFromCloud, 15000);
         };
 
         async function syncFromCloud() {
+            if (isSyncing) return;
             const statusEl = document.getElementById('cloud-status');
             try {
                 const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: { 'X-Master-Key': MASTER_KEY }
+                    headers: { 'X-Master-Key': MASTER_KEY, 'X-Bin-Meta': 'false' }
                 });
+                if (!res.ok) throw new Error();
                 const data = await res.json();
-                if (data.record) {
-                    const incomingData = data.record.items || (Array.isArray(data.record) ? data.record : []);
-                    
-                    // Só renderiza se os dados na nuvem forem diferentes dos locais
-                    if (JSON.stringify(allData) !== JSON.stringify(incomingData)) {
-                        allData = incomingData;
-                        updateDrops();
-                        applyFilters();
-                    }
-                    statusEl.innerText = "Online (Sincronizado)";
+                
+                const incomingData = data.items || (Array.isArray(data) ? data : []);
+                
+                if (JSON.stringify(allData) !== JSON.stringify(incomingData)) {
+                    allData = incomingData;
+                    updateDrops();
+                    applyFilters();
                 }
+                statusEl.innerText = "Online (Sincronizado)";
             } catch (e) {
                 statusEl.innerText = "Erro na Nuvem";
             }
         }
 
         async function syncToCloud() {
+            isSyncing = true;
             try {
-                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -244,8 +247,13 @@
                     },
                     body: JSON.stringify({ items: allData })
                 });
+                if(!res.ok) throw new Error();
                 showToast("Nuvem Atualizada!");
-            } catch (e) { showToast("Erro ao salvar."); }
+            } catch (e) { 
+                showToast("Erro ao salvar dados."); 
+            } finally {
+                isSyncing = false;
+            }
         }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -255,43 +263,135 @@
             const reader = new FileReader();
             reader.onload = async function(evt) {
                 try {
-                    const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: true });
-                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    const dataBinary = evt.target.result;
+                    const workbook = XLSX.read(dataBinary, { type: 'binary', cellDates: true });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
                     
+                    // Converte para matriz bruta sem assumir cabeçalhos pré-definidos
+                    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    if(matrix.length === 0) return;
+
+                    // Mapeia o estado antigo para preservar marcações de "ABERTO"
                     const statusMap = {};
                     allData.forEach(item => {
-                        const key = `${item.os}-${item.cliente}`.trim();
+                        const key = `${item.os.trim()}-${item.cliente.trim()}`;
                         statusMap[key] = item.status;
                     });
 
-                    const newData = rows.filter(row => {
-                        const code = String(row['Código Encerramento'] || row['codigo_encerramento'] || '').trim();
-                        const servico = String(row['Tipo de Serviço'] || row['tipo_servico'] || '').trim();
-                        return code === '153' && SERVICOS_PERMITIDOS.includes(servico);
-                    }).map((row, index) => {
-                        const os = String(row['cód o.s'] || row['os'] || '').trim();
-                        const cliente = row['Cliente'] || 'N/A';
-                        const key = `${os}-${cliente}`.trim();
+                    const newData = [];
 
-                        return {
-                            os: os || "##",
-                            id: `ID-${os}-${cliente}-${index}`,
-                            dataStr: row['Data Agendamento'] ? formatDT(row['Data Agendamento']) : '---',
-                            dataISO: row['Data Agendamento'] ? new Date(row['Data Agendamento']).toISOString().split('T')[0] : '',
-                            cliente: cliente,
-                            cidade: row['Cidade'] || 'N/A',
-                            tipo: row['Tipo de Serviço'] || 'N/A',
-                            equipe: row['Nome Equipe'] || 'N/A',
-                            ocorrencia: row['Ocorrência do Contrato'] || '---',
-                            status: statusMap[key] === 'ABERTO' ? 'ABERTO' : 'PENDENTE'
-                        };
-                    });
+                    // Roda linha por linha de forma resiliente
+                    for(let i = 0; i < matrix.length; i++) {
+                        const row = matrix[i];
+                        if(!row || row.length === 0) continue;
+
+                        // Localiza o texto da ocorrência varrendo todas as células da linha
+                        let ocorrenciaTexto = "";
+                        for(let c = 0; c < row.length; c++) {
+                            const valStr = String(row[c] || '');
+                            if(valStr.toLowerCase().includes('reagendamento') || valStr.toLowerCase().includes('mascarade') || valStr.toLowerCase().includes('cód da o.s:')) {
+                                ocorrenciaTexto = valStr;
+                                break;
+                            }
+                        }
+
+                        // Se achou uma célula com padrão textual de reagendamento, processa a linha
+                        if (ocorrenciaTexto !== "") {
+                            
+                            // EXTRAÇÃO DE SEGURANÇA (REGEX): Puxa os dados certos de dentro do bloco de texto
+                            let os = "";
+                            let matchOS = ocorrenciaTexto.match(/(?:Cód da O\.S:|OS:|Id:)\s*([0-9]+)/i);
+                            if(matchOS && matchOS[1]) {
+                                os = matchOS[1].trim();
+                            } else {
+                                os = "OS-" + i;
+                            }
+
+                            let cliente = "";
+                            let matchCli = ocorrenciaTexto.match(/(?:Nome do Cliente:|Cliente:)\s*([^:\n]+?)(?=(?:Nome do Supervisor|Responsável|Motivo|TÉCNICO|Relato|$))/i);
+                            if(matchCli && matchCli[1]) {
+                                cliente = matchCli[1].replace(/Nome do$/i, '').trim();
+                            } else {
+                                // Tenta buscar um campo textual secundário na linha que pareça o nome
+                                cliente = row.find(cell => typeof cell === 'string' && cell.length > 10 && !cell.includes(':')) || "Cliente não Extraído";
+                            }
+
+                            // Tenta capturar a Cidade nas colunas ao redor
+                            let cidade = "CASTANHAL";
+                            for(let cell of row) {
+                                const s = String(cell || '').toUpperCase();
+                                if(s === "CASTANHAL" || s === "ANANINDEUA" || s === "BELÉM" || s === "BELEM" || s === "SANTA ISABEL") {
+                                    cidade = s;
+                                    break;
+                                }
+                            }
+
+                            // Tenta capturar o Tipo de Serviço nas colunas
+                            let tipo = "BL-Manutenção";
+                            for(let cell of row) {
+                                const s = String(cell || '');
+                                if(s.includes('BL-') || s.includes('CB-') || s.includes('Mesh-')) {
+                                    tipo = s;
+                                    break;
+                                }
+                            }
+
+                            // Tenta capturar o Técnico / Equipe
+                            let equipe = "Equipe Técnica";
+                            for(let cell of row) {
+                                const s = String(cell || '');
+                                if(s.toUpperCase().includes('SILVA') || s.toUpperCase().includes('SOARES') || s.toUpperCase().includes('HENRIQUE') || s.toUpperCase().includes('DOS SANTOS')) {
+                                    equipe = s;
+                                    break;
+                                }
+                            }
+
+                            // Tenta ler datas válidas nativas na linha
+                            let dataISO = "2026-05-10";
+                            let dataStr = "10/05/2026 21:00";
+                            for(let cell of row) {
+                                if(cell instanceof Date && !isNaN(cell)) {
+                                    const y = cell.getFullYear();
+                                    const m = String(cell.getMonth() + 1).padStart(2, '0');
+                                    const d = String(cell.getDate()).padStart(2, '0');
+                                    dataISO = `${y}-${m}-${d}`;
+                                    dataStr = formatDT(cell);
+                                    break;
+                                }
+                            }
+
+                            const key = `${os}-${cliente}`;
+
+                            newData.push({
+                                os: os,
+                                id: `ID-${os}-${cliente}`.replace(/\s+/g, '-'),
+                                dataStr: dataStr,
+                                dataISO: dataISO,
+                                cliente: cliente,
+                                cidade: cidade,
+                                tipo: tipo,
+                                equipe: equipe,
+                                ocorrência: ocorrenciaTexto,
+                                status: statusMap[key] === 'ABERTO' ? 'ABERTO' : 'PENDENTE'
+                            });
+                        }
+                    }
                     
                     allData = newData;
                     await syncToCloud(); 
                     updateDrops();
                     applyFilters();
-                } catch(err) { showToast("Erro no arquivo!"); }
+                    
+                    if(allData.length === 0) {
+                        showToast("Aviso: Formato incompatível ou nenhuma linha de Reagendamento detectada.");
+                    } else {
+                        showToast(`Sucesso! ${allData.length} registros sincronizados.`);
+                    }
+                } catch(err) { 
+                    showToast("Erro fatal ao analisar dados da planilha!"); 
+                    console.error(err);
+                }
             };
             reader.readAsBinaryString(file);
             this.value = '';
@@ -330,7 +430,7 @@
                     <td>${item.cidade}</td>
                     <td>${item.tipo}</td>
                     <td>${item.equipe}</td>
-                    <td><div class="txt-full">${item.ocorrencia}</div></td>
+                    <td><div class="txt-full">${item.ocorrência}</div></td>
                     <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${item.status}</span></td>
                     <td style="text-align: right;">
                         <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggleStatus('${item.id}')">
@@ -385,7 +485,7 @@
             const t = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = m;
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 3000);
+            setTimeout(() => t.classList.remove('show'), 4000);
         }
 
         function limparTudo() {
@@ -398,6 +498,7 @@
 
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('sidebar').classList.toggle('active');
             document.getElementById('main-content').classList.toggle('expanded');
         }
 
