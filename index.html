@@ -148,7 +148,7 @@
                     <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
                     <div>
                         <h1>Controle de Reagendamentos</h1>
-                        <p style="color: var(--text-muted); font-size: 0.85rem">Atualização automática ativada | Status: <strong id="cloud-status">Verificando...</strong></p>
+                        <p style="color: var(--text-muted); font-size: 0.85rem">Atualização em Tempo Real Ativa | Status: <strong id="cloud-status">Conectando...</strong></p>
                     </div>
                 </div>
                 <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
@@ -210,7 +210,8 @@
 
         window.onload = () => { 
             syncFromCloud(); 
-            setInterval(syncFromCloud, 15000);
+            // Varredura de alta velocidade (a cada 2 segundos) para capturar cliques de outros usuários instantaneamente
+            setInterval(syncFromCloud, 2000);
         };
 
         async function syncFromCloud() {
@@ -225,14 +226,17 @@
                 
                 const incomingData = data.items || (Array.isArray(data) ? data : []);
                 
+                // Só reconstrói a tabela se houver de fato uma mudança vinda da nuvem
                 if (JSON.stringify(allData) !== JSON.stringify(incomingData)) {
                     allData = incomingData;
                     updateDrops();
                     applyFilters();
                 }
-                statusEl.innerText = "Online (Sincronizado)";
+                statusEl.innerText = "Online (Tempo Real)";
+                statusEl.style.color = "#166534";
             } catch (e) {
-                statusEl.innerText = "Erro na Nuvem";
+                statusEl.innerText = "Erro de Conectividade";
+                statusEl.style.color = "#ef4444";
             }
         }
 
@@ -248,9 +252,8 @@
                     body: JSON.stringify({ items: allData })
                 });
                 if(!res.ok) throw new Error();
-                showToast("Nuvem Atualizada!");
             } catch (e) { 
-                showToast("Erro ao salvar dados."); 
+                showToast("Erro ao sincronizar alteração."); 
             } finally {
                 isSyncing = false;
             }
@@ -268,11 +271,9 @@
                     const sheetName = workbook.SheetNames[0];
                     const sheet = workbook.Sheets[sheetName];
                     
-                    // Converte para matriz bruta sem assumir cabeçalhos pré-definidos
                     const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                     if(matrix.length === 0) return;
 
-                    // Mapeia o estado antigo para preservar marcações de "ABERTO"
                     const statusMap = {};
                     allData.forEach(item => {
                         const key = `${item.os.trim()}-${item.cliente.trim()}`;
@@ -281,12 +282,10 @@
 
                     const newData = [];
 
-                    // Roda linha por linha de forma resiliente
                     for(let i = 0; i < matrix.length; i++) {
                         const row = matrix[i];
                         if(!row || row.length === 0) continue;
 
-                        // Localiza o texto da ocorrência varrendo todas as células da linha
                         let ocorrenciaTexto = "";
                         for(let c = 0; c < row.length; c++) {
                             const valStr = String(row[c] || '');
@@ -296,10 +295,7 @@
                             }
                         }
 
-                        // Se achou uma célula com padrão textual de reagendamento, processa a linha
                         if (ocorrenciaTexto !== "") {
-                            
-                            // EXTRAÇÃO DE SEGURANÇA (REGEX): Puxa os dados certos de dentro do bloco de texto
                             let os = "";
                             let matchOS = ocorrenciaTexto.match(/(?:Cód da O\.S:|OS:|Id:)\s*([0-9]+)/i);
                             if(matchOS && matchOS[1]) {
@@ -313,11 +309,9 @@
                             if(matchCli && matchCli[1]) {
                                 cliente = matchCli[1].replace(/Nome do$/i, '').trim();
                             } else {
-                                // Tenta buscar um campo textual secundário na linha que pareça o nome
                                 cliente = row.find(cell => typeof cell === 'string' && cell.length > 10 && !cell.includes(':')) || "Cliente não Extraído";
                             }
 
-                            // Tenta capturar a Cidade nas colunas ao redor
                             let cidade = "CASTANHAL";
                             for(let cell of row) {
                                 const s = String(cell || '').toUpperCase();
@@ -327,7 +321,6 @@
                                 }
                             }
 
-                            // Tenta capturar o Tipo de Serviço nas colunas
                             let tipo = "BL-Manutenção";
                             for(let cell of row) {
                                 const s = String(cell || '');
@@ -337,7 +330,6 @@
                                 }
                             }
 
-                            // Tenta capturar o Técnico / Equipe
                             let equipe = "Equipe Técnica";
                             for(let cell of row) {
                                 const s = String(cell || '');
@@ -347,7 +339,6 @@
                                 }
                             }
 
-                            // Tenta ler datas válidas nativas na linha
                             let dataISO = "2026-05-10";
                             let dataStr = "10/05/2026 21:00";
                             for(let cell of row) {
@@ -382,15 +373,9 @@
                     await syncToCloud(); 
                     updateDrops();
                     applyFilters();
-                    
-                    if(allData.length === 0) {
-                        showToast("Aviso: Formato incompatível ou nenhuma linha de Reagendamento detectada.");
-                    } else {
-                        showToast(`Sucesso! ${allData.length} registros sincronizados.`);
-                    }
+                    showToast(`Sucesso! ${allData.length} registros sincronizados.`);
                 } catch(err) { 
                     showToast("Erro fatal ao analisar dados da planilha!"); 
-                    console.error(err);
                 }
             };
             reader.readAsBinaryString(file);
@@ -448,7 +433,7 @@
             if (index !== -1) {
                 allData[index].status = allData[index].status === 'ABERTO' ? 'PENDENTE' : 'ABERTO';
                 render();
-                await syncToCloud();
+                await syncToCloud(); // Empurra instantaneamente para a nuvem
             }
         }
 
@@ -485,7 +470,7 @@
             const t = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = m;
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 4000);
+            setTimeout(() => t.classList.remove('show'), 3000);
         }
 
         function limparTudo() {
