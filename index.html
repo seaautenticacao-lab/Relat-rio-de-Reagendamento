@@ -1,504 +1,665 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocol Control | ISP System Real-Time</title>
+    <title>Painel de Reagendamento Técnico | ISP Premium</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                        accentBlue: '#3b82f6',
+                        accentGreen: '#10b981'
+                    }
+                }
+            }
+        }
+    </script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+    
     <style>
-        :root {
-            --primary: #2563eb;
-            --danger: #ef4444;
-            --bg-app: #f8fafc;
-            --bg-card: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-            --sidebar-w: 260px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --row-opened: #dcfce7;
-            --text-opened: #166534;
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 20px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 20px;
         }
 
-        .dark-mode {
-            --bg-app: #0f172a;
-            --bg-card: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border: #334155;
-            --row-opened: #064e3b;
-            --text-opened: #a7f3d0;
+        thead th {
+            position: sticky;
+            top: 0;
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .dark thead th {
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,0.05);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
-        body { background-color: var(--bg-app); color: var(--text-main); transition: var(--transition); overflow-x: hidden; }
-
-        .app-container { display: flex; min-height: 100vh; }
-
-        .sidebar {
-            width: var(--sidebar-w);
-            background: var(--bg-card);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 1.5rem;
-            position: fixed;
-            height: 100vh;
-            z-index: 100;
-            transition: var(--transition);
-            left: 0;
+        tr {
+            transition: all 0.2s ease-in-out;
         }
 
-        .sidebar.collapsed { left: calc(var(--sidebar-w) * -1); }
-
-        .logo { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.3rem; color: var(--primary); margin-bottom: 2.5rem; }
-        nav { display: flex; flex-direction: column; gap: 8px; height: 100%; }
-        nav a { text-decoration: none; color: var(--text-muted); padding: 0.8rem 1rem; border-radius: 10px; display: flex; align-items: center; gap: 12px; transition: var(--transition); font-weight: 500; }
-        nav a.active { background: #2563eb15; color: var(--primary); }
-        .spacer { flex-grow: 1; }
-        
-        .nav-btn { background: var(--bg-app); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; justify-content: center; font-weight: 600; margin-bottom: 8px; transition: var(--transition); }
-
-        .main-content { 
-            margin-left: var(--sidebar-w); 
-            flex-grow: 1; 
-            padding: 2rem; 
-            width: calc(100% - var(--sidebar-w)); 
-            transition: var(--transition);
+        /* VERDE BEM MAIS NÍTIDO E COM BORDA LATERAL */
+        .row-reagendada {
+            background-color: rgba(16, 185, 129, 0.15) !important;
+            box-shadow: inset 6px 0 0 0 #10b981 !important;
+        }
+        .dark .row-reagendada {
+            background-color: rgba(16, 185, 129, 0.20) !important;
+            box-shadow: inset 6px 0 0 0 #10b981 !important;
+        }
+        .row-reagendada:hover {
+            background-color: rgba(16, 185, 129, 0.22) !important;
+        }
+        .dark .row-reagendada:hover {
+            background-color: rgba(16, 185, 129, 0.28) !important;
         }
 
-        .main-content.expanded { margin-left: 0; width: 100%; }
-
-        .top-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; gap: 20px; }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-
-        .btn-toggle-sidebar {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
+        @keyframes slideIn {
+            from { transform: translateX(120%); }
+            to { transform: translateX(0); }
+        }
+        .toast-slide-in {
+            animation: slideIn 0.25s cubic-bezier(0, 0, 0.2, 1) forwards;
         }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-        .card { background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border); padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
-        .stat-card { display: flex; align-items: center; gap: 1.25rem; }
-        .stat-card .icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
-        .icon.blue { background: #eff6ff; color: #1d4ed8; }
-        .icon.orange { background: #fff7ed; color: #c2410c; }
-        .icon.green { background: #f0fdf4; color: #15803d; }
-
-        .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-top: 1rem; }
-        .filters-grid input, .filters-grid select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-app); color: var(--text-main); font-size: 0.85rem; outline: none; }
-
-        .table-container { overflow-x: auto; border-radius: 12px; margin-top: 1.5rem; border: 1px solid var(--border); }
-        table { width: 100%; border-collapse: collapse; min-width: 1200px; background: var(--bg-card); table-layout: fixed; }
-        th { background: var(--bg-app); padding: 0.9rem; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border); }
-        td { padding: 1rem 0.9rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; word-wrap: break-word; }
-
-        tr.row-opened td { background-color: var(--row-opened) !important; color: var(--text-opened) !important; }
-        .txt-full { font-size: 0.8rem; line-height: 1.4; max-height: 120px; overflow-y: auto; padding-right: 5px; }
-
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 700; }
-        .badge-pending { background: #f1f5f9; color: #475569; }
-        .badge-opened { background: #166534; color: white; }
-
-        .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition); font-size: 0.8rem; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #1e293b; color: white; border-radius: 8px; transform: translateY(150%); transition: 0.3s; z-index: 1000; font-size: 0.85rem; }
-        .toast.show { transform: translateY(0); }
-
-        @media (max-width: 768px) {
-            .sidebar { left: calc(var(--sidebar-w) * -1); }
-            .sidebar.active { left: 0; }
-            .main-content { margin-left: 0; width: 100%; }
+        aside {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
     </style>
 </head>
-<body>
-    
-    <div class="app-container">
-        <aside class="sidebar" id="sidebar">
-            <div class="logo"><i class="fas fa-network-wired"></i><span>ISP Protocol</span></div>
-            <nav>
-                <a href="#" class="active"><i class="fas fa-columns"></i> <span>Painel</span></a>
-                <a href="#" onclick="syncFromCloud()"><i class="fas fa-sync"></i> <span>Sincronizar Agora</span></a>
-                <a href="#" onclick="exportExcel()"><i class="fas fa-file-export"></i> <span>Exportar</span></a>
-                <div class="spacer"></div>
-                <button class="nav-btn" onclick="limparTudo()"><i class="fas fa-trash-alt"></i> <span>Zerar Banco</span></button>
-                <button class="nav-btn" onclick="toggleTheme()"><i class="fas fa-moon"></i> <span>Tema</span></button>
-            </nav>
-        </aside>
+<body class="bg-slate-50 dark:bg-darkBg text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-300">
 
-        <main class="main-content" id="main-content">
-            <header class="top-header">
-                <div class="header-left">
-                    <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
-                    <div>
-                        <h1>Controle de Reagendamentos</h1>
-                        <p style="color: var(--text-muted); font-size: 0.85rem">Atualização em Tempo Real Ativa | Status: <strong id="cloud-status">Conectando...</strong></p>
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3"></div>
+
+    <div class="flex min-h-screen overflow-hidden">
+        
+        <aside id="sidebar" class="w-64 bg-white dark:bg-darkCard border-r border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-between hidden md:flex relative flex-shrink-0">
+            
+            <button id="toggle-sidebar" class="absolute -right-3 top-6 bg-blue-600 hover:bg-blue-700 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md border border-white dark:border-slate-800 z-30 transition-all">
+                <i id="toggle-icon" class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+
+            <div>
+                <div class="flex items-center gap-3 mb-8 overflow-hidden whitespace-nowrap">
+                    <div class="bg-blue-600 text-white p-2.5 rounded-xl shadow-lg shadow-blue-500/30 flex-shrink-0">
+                        <i class="fa-solid fa-network-wired text-xl"></i>
+                    </div>
+                    <div class="sidebar-text">
+                        <h1 class="font-bold text-lg leading-none">ISP Control</h1>
+                        <span class="text-xs text-slate-400 font-medium">Reagendamentos</span>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
-                    <i class="fas fa-plus"></i> Importar Planilha
+                
+                <nav class="space-y-2">
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold transition-all" title="Dashboard">
+                        <i class="fa-solid fa-chart-pie flex-shrink-0 text-xl"></i> 
+                        <span class="sidebar-text whitespace-nowrap text-base">Dashboard</span>
+                    </a>
+                    
+                    <label for="file-upload" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 font-bold transition-all cursor-pointer" title="Importar Planilha">
+                        <i class="fa-solid fa-file-import flex-shrink-0 text-xl"></i> 
+                        <span class="sidebar-text whitespace-nowrap text-base">Importar Planilha</span>
+                    </label>
+                    <input type="file" id="file-upload" accept=".xlsx, .ods, .xls" class="hidden">
+                    
+                    <button id="btn-export" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 font-bold transition-all" title="Exportar Dados">
+                        <i class="fa-solid fa-file-export flex-shrink-0 text-xl"></i> 
+                        <span class="sidebar-text whitespace-nowrap text-base text-left">Exportar Dados</span>
+                    </button>
+                    
+                    <button id="btn-change-user" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 font-bold transition-all" title="Alterar Usuário">
+                        <i class="fa-solid fa-user-gear flex-shrink-0 text-xl"></i> 
+                        <span class="sidebar-text whitespace-nowrap text-base text-left">Alterar Operador</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="relative flex-shrink-0">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md" id="user-avatar">
+                            O
+                        </div>
+                        <span id="connection-badge" class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-darkCard rounded-full"></span>
+                    </div>
+                    <div class="sidebar-text whitespace-nowrap">
+                        <p class="font-bold text-base" id="user-name-display">Carregando...</p>
+                        <span class="text-xs text-slate-400" id="connection-status-text">Painel Ativo</span>
+                    </div>
+                </div>
+                
+                <button id="theme-toggle" class="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all" title="Alternar Tema">
+                    <i class="fa-solid fa-moon dark:hidden flex-shrink-0"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline flex-shrink-0"></i> 
+                    <span class="sidebar-text whitespace-nowrap">Alternar Tema</span>
                 </button>
-                <input type="file" id="fileInput" hidden accept=".xlsx, .xls">
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+            <header class="bg-white dark:bg-darkCard border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between md:justify-end gap-4">
+                <div class="flex items-center gap-3 md:hidden">
+                    <div class="bg-blue-600 text-white p-2 rounded-lg">
+                        <i class="fa-solid fa-network-wired"></i>
+                    </div>
+                    <h1 class="font-bold text-md">ISP Control</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span>Controle Interno</span>
+                    </div>
+                </div>
             </header>
 
-            <section class="stats-grid">
-                <div class="card stat-card"><div class="icon blue"><i class="fas fa-users"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Total</span><h2 id="stat-total">0</h2></div></div>
-                <div class="card stat-card"><div class="icon orange"><i class="fas fa-clock"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Pendentes</span><h2 id="stat-pending">0</h2></div></div>
-                <div class="card stat-card"><div class="icon green"><i class="fas fa-check"></i></div><div><span style="font-size:0.7rem; color:var(--text-muted)">Abertos</span><h2 id="stat-opened">0</h2></div></div>
-            </section>
+            <div class="p-6 space-y-6 w-full max-w-none mx-auto">
+                
+                <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-darkCard p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total de Serviços</span>
+                            <h3 class="text-3xl font-black mt-1" id="stat-total">0</h3>
+                        </div>
+                        <div class="bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 p-4 rounded-xl"><i class="fa-solid fa-list-check text-2xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-darkCard p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Reagendados</span>
+                            <h3 class="text-3xl font-black mt-1 text-emerald-600 dark:text-emerald-400" id="stat-reagendados">0</h3>
+                        </div>
+                        <div class="bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl"><i class="fa-solid fa-calendar-check text-2xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-darkCard p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Pendentes</span>
+                            <h3 class="text-3xl font-black mt-1 text-amber-500" id="stat-pendentes">0</h3>
+                        </div>
+                        <div class="bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 p-4 rounded-xl"><i class="fa-solid fa-clock text-2xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-darkCard p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Eficiência</span>
+                            <h3 class="text-3xl font-black mt-1" id="stat-eficiencia">0%</h3>
+                        </div>
+                        <div class="bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 p-4 rounded-xl"><i class="fa-solid fa-percent text-2xl"></i></div>
+                    </div>
+                </section>
 
-            <section class="card">
-                <div class="filters-grid">
-                    <input type="text" id="fOS" placeholder="O.S..." onkeyup="applyFilters()">
-                    <input type="text" id="fCli" placeholder="Cliente..." onkeyup="applyFilters()">
-                    <input type="date" id="fDate" onchange="applyFilters()">
-                    <select id="fCity" onchange="applyFilters()"><option value="">Cidade</option></select>
-                    <select id="fServ" onchange="applyFilters()"><option value="">Serviço</option></select>
-                </div>
-                <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="btn btn-outline" onclick="massMark()">Marcar Visíveis como Aberto</button>
-                    <button class="btn btn-outline" onclick="clearFilters()">Limpar Filtros</button>
-                </div>
-            </section>
+                <section class="bg-white dark:bg-darkCard p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-base"></i>
+                        <input type="text" id="search-input" placeholder="Pesquisar por Código O.S., Cliente ou Ocorrência..." class="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-base focus:outline-none focus:border-blue-500 transition-all">
+                    </div>
+                    <div class="grid grid-cols-2 sm:flex gap-3">
+                        <select id="filter-cidade" class="px-4 py-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-base focus:outline-none focus:border-blue-500 transition-all cursor-pointer font-semibold">
+                            <option value="">Todas as Cidades</option>
+                        </select>
+                        <select id="filter-equipe" class="px-4 py-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-base focus:outline-none focus:border-blue-500 transition-all cursor-pointer font-semibold">
+                            <option value="">Todas as Equipes</option>
+                        </select>
+                    </div>
+                </section>
 
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 110px;">O.S</th>
-                            <th style="width: 140px;">Data/Hora</th>
-                            <th style="width: 250px;">Cliente</th>
-                            <th style="width: 150px;">Cidade</th>
-                            <th style="width: 180px;">Serviço</th>
-                            <th style="width: 180px;">Equipe</th>
-                            <th style="width: auto;">Ocorrência</th>
-                            <th style="width: 120px;">Status</th>
-                            <th style="width: 80px; text-align: right;">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody"></tbody>
-                </table>
+                <section class="bg-white dark:bg-darkCard rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm overflow-hidden flex flex-col">
+                    <div class="overflow-x-auto min-h-[400px] relative">
+                        <table class="w-full text-left border-collapse text-base">
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-base">
+                                    <th class="p-5 whitespace-nowrap cursor-pointer hover:text-blue-500 transition-colors" data-sort="cod_os">Cód. O.S <i class="fa-solid fa-sort ml-1 text-sm"></i></th>
+                                    <th class="p-5 min-w-[220px] cursor-pointer hover:text-blue-500 transition-colors" data-sort="cliente">Cliente <i class="fa-solid fa-sort ml-1 text-sm"></i></th>
+                                    <th class="p-5 whitespace-nowrap cursor-pointer hover:text-blue-500 transition-colors" data-sort="cidade">Cidade <i class="fa-solid fa-sort ml-1 text-sm"></i></th>
+                                    <th class="p-5 min-w-[180px] cursor-pointer hover:text-blue-500 transition-colors" data-sort="tipo_servico">Tipo de Serviço <i class="fa-solid fa-sort ml-1 text-sm"></i></th>
+                                    <th class="p-5 min-w-[180px] cursor-pointer hover:text-blue-500 transition-colors" data-sort="nome_equipe">Nome Equipe <i class="fa-solid fa-sort ml-1 text-sm"></i></th>
+                                    <th class="p-5 min-w-[350px]">Ocorrência do Contrato</th>
+                                    <th class="p-5 text-center whitespace-nowrap">Status / Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+                                <tr>
+                                    <td colspan="7" class="p-10 text-center text-slate-400 font-semibold">
+                                        Nenhum registro carregado. Importe uma planilha excel para iniciar.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <footer class="p-5 bg-slate-50 dark:bg-slate-900/20 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm font-bold text-slate-500">
+                        <span id="pagination-info">Mostrando 0 de 0 registros</span>
+                        <div class="flex items-center gap-3">
+                            <button id="prev-page" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">Anterior</button>
+                            <div id="page-numbers" class="flex gap-1"></div>
+                            <button id="next-page" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">Próximo</button>
+                        </div>
+                    </footer>
+                </section>
             </div>
         </main>
     </div>
 
-    <div id="toast" class="toast"><span id="toast-msg"></span></div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <script>
-        const MASTER_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
-        const BIN_ID = "696fe1e1ae596e708fe97dbb";
+        const SERVICOS_PERMITIDOS = [
+            "BL-SUPORTE", "BL-MANUTENÇÃO", "MESH-INSTALAÇÃO", "MESH-INSTALAÇÃO COM TROCA",
+            "MESH-INSTALAÇÃO SEM TROCA", "MESH-MUDANÇA DE CÔMODO", "BL-INSTALAÇÃO",
+            "CB-INSTALAÇÃO", "BL-MUDANÇA DE COMODATO /1000", "BL-INSPEÇÃO",
+            "BL-MUDANÇA DE COMODO", "BL-MUDANÇA DE ENDEREÇO", "BL-REATIVAÇÃO DE CLIENTE SUSPENSO",
+            "BL-TROCA COM MUDANÇA", "CB-MANUTENÇÃO", "CB-MUDANÇA DE ENDEREÇO"
+        ];
 
-        let allData = [];
-        let filteredData = [];
-        let isSyncing = false;
-
-        window.onload = () => { 
-            syncFromCloud(); 
-            // Varredura de alta velocidade (a cada 2 segundos) para capturar cliques de outros usuários instantaneamente
-            setInterval(syncFromCloud, 2000);
+        let state = {
+            servicos: [],
+            filtros: { busca: '', cidade: '', equipe: '' },
+            ordenacao: { coluna: 'cod_os', ordem: 'asc' },
+            paginacao: { paginaAtual: 1, limitePorPagina: 15 },
+            usuarioLogado: ''
         };
 
-        async function syncFromCloud() {
-            if (isSyncing) return;
-            const statusEl = document.getElementById('cloud-status');
-            try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: { 'X-Master-Key': MASTER_KEY, 'X-Bin-Meta': 'false' }
-                });
-                if (!res.ok) throw new Error();
-                const data = await res.json();
-                
-                const incomingData = data.items || (Array.isArray(data) ? data : []);
-                
-                // Só reconstrói a tabela se houver de fato uma mudança vinda da nuvem
-                if (JSON.stringify(allData) !== JSON.stringify(incomingData)) {
-                    allData = incomingData;
-                    updateDrops();
-                    applyFilters();
+        document.addEventListener('DOMContentLoaded', () => {
+            definirUsuario();
+            configurarComponentes();
+            configurarSidebarRetratil();
+            recuperarDadosLocais();
+            
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'isp_local_data') {
+                    recuperarDadosLocais();
                 }
-                statusEl.innerText = "Online (Tempo Real)";
-                statusEl.style.color = "#166534";
-            } catch (e) {
-                statusEl.innerText = "Erro de Conectividade";
-                statusEl.style.color = "#ef4444";
+            });
+        });
+
+        function definirUsuario(forçarTroca = false) {
+            let user = localStorage.getItem('isp_operator_name');
+            if (!user || forçarTroca) {
+                user = prompt('Digite o seu nome para identificação no painel:') || 'Operador';
+                user = user.trim();
+                if(!user) user = 'Operador_' + Math.floor(Math.random() * 1000);
+                localStorage.setItem('isp_operator_name', user);
             }
+            state.usuarioLogado = user;
+            document.getElementById('user-name-display').innerText = user;
+            document.getElementById('user-avatar').innerText = user.charAt(0).toUpperCase();
         }
 
-        async function syncToCloud() {
-            isSyncing = true;
-            try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Master-Key': MASTER_KEY
-                    },
-                    body: JSON.stringify({ items: allData })
+        function configurarSidebarRetratil() {
+            const sidebar = document.getElementById('sidebar');
+            const toggleBtn = document.getElementById('toggle-sidebar');
+            const toggleIcon = document.getElementById('toggle-icon');
+            const texts = document.querySelectorAll('.sidebar-text');
+
+            toggleBtn.addEventListener('click', () => {
+                const estaColapsado = sidebar.classList.contains('w-20');
+                
+                if (estaColapsado) {
+                    sidebar.classList.remove('w-20', 'p-4');
+                    sidebar.classList.add('w-64', 'p-6');
+                    toggleIcon.className = "fa-solid fa-chevron-left text-xs";
+                    setTimeout(() => {
+                        texts.forEach(t => t.classList.remove('hidden'));
+                    }, 150);
+                } else {
+                    texts.forEach(t => t.classList.add('hidden'));
+                    sidebar.classList.remove('w-64', 'p-6');
+                    sidebar.classList.add('w-20', 'p-4');
+                    toggleIcon.className = "fa-solid fa-chevron-right text-xs";
+                }
+            });
+        }
+
+        function configurarComponentes() {
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                state.filtros.busca = e.target.value.toLowerCase();
+                state.paginacao.paginaAtual = 1;
+                renderizarPainelETabela();
+            });
+
+            document.getElementById('filter-cidade').addEventListener('change', (e) => {
+                state.filtros.cidade = e.target.value;
+                state.paginacao.paginaAtual = 1;
+                renderizarPainelETabela();
+            });
+
+            document.getElementById('filter-equipe').addEventListener('change', (e) => {
+                state.filtros.equipe = e.target.value;
+                state.paginacao.paginaAtual = 1;
+                renderizarPainelETabela();
+            });
+
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (state.paginacao.paginaAtual > 1) {
+                    state.paginacao.paginaAtual--;
+                    renderizarPainelETabela();
+                }
+            });
+
+            document.getElementById('next-page').addEventListener('click', () => {
+                const totalPaginas = Math.ceil(filtrarDados().length / state.paginacao.limitePorPagina);
+                if (state.paginacao.paginaAtual < totalPaginas) {
+                    state.paginacao.paginaAtual++;
+                    renderizarPainelETabela();
+                }
+            });
+
+            document.getElementById('file-upload').addEventListener('change', processarPlanilha);
+            document.getElementById('btn-export').addEventListener('click', exportarReagendados);
+            
+            document.getElementById('btn-change-user').addEventListener('click', () => {
+                definirUsuario(true);
+                showToast(`Operador alterado para: ${state.usuarioLogado}`, 'info');
+            });
+
+            document.querySelectorAll('thead th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const coluna = th.getAttribute('data-sort');
+                    state.ordenacao.ordem = (state.ordenacao.coluna === coluna && state.ordenacao.ordem === 'asc') ? 'desc' : 'asc';
+                    state.ordenacao.coluna = coluna;
+                    renderizarPainelETabela();
                 });
-                if(!res.ok) throw new Error();
-            } catch (e) { 
-                showToast("Erro ao sincronizar alteração."); 
-            } finally {
-                isSyncing = false;
-            }
+            });
+
+            document.getElementById('theme-toggle').addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+            });
         }
 
-        document.getElementById('fileInput').addEventListener('change', function(e) {
+        function limparTextoBruto(txt, fallback = "Não Informado") {
+            if (!txt) return fallback;
+            let limpo = String(txt)
+                .replace(/^\d+\s*[-–—_]\s*/g, '') 
+                .replace(/\s*[-–—_]\s*\d+$/g, '') 
+                .replace(/\(\s*\d+\s*\)/g, '')     
+                .replace(/\s+/g, ' ')              
+                .trim();
+            
+            return limpo.length > 0 ? limpo : String(txt).trim();
+        }
+
+        function processarPlanilha(e) {
             const file = e.target.files[0];
             if (!file) return;
-            
+
+            showToast('Processando planilha técnica...', 'info');
             const reader = new FileReader();
-            reader.onload = async function(evt) {
+
+            reader.onload = function(e) {
                 try {
-                    const dataBinary = evt.target.result;
-                    const workbook = XLSX.read(dataBinary, { type: 'binary', cellDates: true });
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellFormula: false, cellHTML: false });
                     const sheetName = workbook.SheetNames[0];
                     const sheet = workbook.Sheets[sheetName];
                     
-                    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                    if(matrix.length === 0) return;
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+                    if (rows.length < 2) {
+                        showToast('Planilha vazia ou sem dados válidos.', 'error');
+                        return;
+                    }
 
-                    const statusMap = {};
-                    allData.forEach(item => {
-                        const key = `${item.os.trim()}-${item.cliente.trim()}`;
-                        statusMap[key] = item.status;
-                    });
-
-                    const newData = [];
-
-                    for(let i = 0; i < matrix.length; i++) {
-                        const row = matrix[i];
-                        if(!row || row.length === 0) continue;
-
-                        let ocorrenciaTexto = "";
-                        for(let c = 0; c < row.length; c++) {
-                            const valStr = String(row[c] || '');
-                            if(valStr.toLowerCase().includes('reagendamento') || valStr.toLowerCase().includes('mascarade') || valStr.toLowerCase().includes('cód da o.s:')) {
-                                ocorrenciaTexto = valStr;
-                                break;
-                            }
-                        }
-
-                        if (ocorrenciaTexto !== "") {
-                            let os = "";
-                            let matchOS = ocorrenciaTexto.match(/(?:Cód da O\.S:|OS:|Id:)\s*([0-9]+)/i);
-                            if(matchOS && matchOS[1]) {
-                                os = matchOS[1].trim();
-                            } else {
-                                os = "OS-" + i;
-                            }
-
-                            let cliente = "";
-                            let matchCli = ocorrenciaTexto.match(/(?:Nome do Cliente:|Cliente:)\s*([^:\n]+?)(?=(?:Nome do Supervisor|Responsável|Motivo|TÉCNICO|Relato|$))/i);
-                            if(matchCli && matchCli[1]) {
-                                cliente = matchCli[1].replace(/Nome do$/i, '').trim();
-                            } else {
-                                cliente = row.find(cell => typeof cell === 'string' && cell.length > 10 && !cell.includes(':')) || "Cliente não Extraído";
-                            }
-
-                            let cidade = "CASTANHAL";
-                            for(let cell of row) {
-                                const s = String(cell || '').toUpperCase();
-                                if(s === "CASTANHAL" || s === "ANANINDEUA" || s === "BELÉM" || s === "BELEM" || s === "SANTA ISABEL") {
-                                    cidade = s;
-                                    break;
-                                }
-                            }
-
-                            let tipo = "BL-Manutenção";
-                            for(let cell of row) {
-                                const s = String(cell || '');
-                                if(s.includes('BL-') || s.includes('CB-') || s.includes('Mesh-')) {
-                                    tipo = s;
-                                    break;
-                                }
-                            }
-
-                            let equipe = "Equipe Técnica";
-                            for(let cell of row) {
-                                const s = String(cell || '');
-                                if(s.toUpperCase().includes('SILVA') || s.toUpperCase().includes('SOARES') || s.toUpperCase().includes('HENRIQUE') || s.toUpperCase().includes('DOS SANTOS')) {
-                                    equipe = s;
-                                    break;
-                                }
-                            }
-
-                            let dataISO = "2026-05-10";
-                            let dataStr = "10/05/2026 21:00";
-                            for(let cell of row) {
-                                if(cell instanceof Date && !isNaN(cell)) {
-                                    const y = cell.getFullYear();
-                                    const m = String(cell.getMonth() + 1).padStart(2, '0');
-                                    const d = String(cell.getDate()).padStart(2, '0');
-                                    dataISO = `${y}-${m}-${d}`;
-                                    dataStr = formatDT(cell);
-                                    break;
-                                }
-                            }
-
-                            const key = `${os}-${cliente}`;
-
-                            newData.push({
-                                os: os,
-                                id: `ID-${os}-${cliente}`.replace(/\s+/g, '-'),
-                                dataStr: dataStr,
-                                dataISO: dataISO,
-                                cliente: cliente,
-                                cidade: cidade,
-                                tipo: tipo,
-                                equipe: equipe,
-                                ocorrência: ocorrenciaTexto,
-                                status: statusMap[key] === 'ABERTO' ? 'ABERTO' : 'PENDENTE'
-                            });
-                        }
+                    const headers = rows[0].map(h => String(h).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim());
+                    
+                    const idxOs = headers.findIndex(h => h === 'codos' || h === 'codigoos' || h.includes('os'));
+                    const idxCliente = headers.findIndex(h => h === 'cliente' || h === 'nome' || h === 'nomecliente');
+                    const idxCidade = headers.findIndex(h => h.includes('cidade') || h.includes('municipio'));
+                    const idxServico = headers.findIndex(h => h === 'tipodeservico' || h === 'servico' || h === 'tipo' || h.includes('descricao'));
+                    
+                    let idxEquipe = headers.findIndex(h => (h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador')) && !h.includes('id') && !h.includes('cod'));
+                    if (idxEquipe === -1) {
+                        idxEquipe = headers.findIndex(h => h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador'));
                     }
                     
-                    allData = newData;
-                    await syncToCloud(); 
-                    updateDrops();
-                    applyFilters();
-                    showToast(`Sucesso! ${allData.length} registros sincronizados.`);
-                } catch(err) { 
-                    showToast("Erro fatal ao analisar dados da planilha!"); 
+                    const idxOcorrencia = headers.findIndex(h => h.includes('ocorrencia'));
+                    const idxEncerramento = headers.findIndex(h => h.includes('encerramento') || h.includes('encerr') || h.includes('codigo'));
+
+                    if (idxOs === -1 || idxEncerramento === -1) {
+                        showToast('Colunas obrigatórias não foram detectadas no mapeamento.', 'error');
+                        return;
+                    }
+
+                    const listagemValida = [];
+
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (!row[idxOs]) continue;
+
+                        let codEncRaw = row[idxEncerramento] !== undefined ? String(row[idxEncerramento]).trim() : "";
+                        let codEncClean = codEncRaw.split('.')[0].trim();
+
+                        if (codEncClean === "153") {
+                            let clienteBruto = idxCliente !== -1 ? String(row[idxCliente]).trim() : "";
+                            let servicoBruto = idxServico !== -1 ? String(row[idxServico]).trim() : "";
+                            let equipeBruta = idxEquipe !== -1 ? String(row[idxEquipe]).trim() : "";
+
+                            let servicoLimpo = limparTextoBruto(servicoBruto, "Técnico");
+
+                            if (SERVICOS_PERMITIDOS.includes(servicoLimpo.toUpperCase())) {
+                                listagemValida.push({
+                                    id: 'os_' + String(row[idxOs]).trim(), 
+                                    cod_os: String(row[idxOs]).trim(),
+                                    cliente: limparTextoBruto(clienteBruto, "Não Informado"),
+                                    cidade: (idxCidade !== -1 && row[idxCidade]) ? String(row[idxCidade]).trim() : "Geral",
+                                    tipo_servico: servicoLimpo,
+                                    nome_equipe: limparTextoBruto(equipeBruta, "Sem Equipe"),
+                                    ocorrencia_contrato: (idxOcorrencia !== -1 && row[idxOcorrencia]) ? String(row[idxOcorrencia]).trim() : "-",
+                                    reagendado: false,
+                                    reagendado_por: "",
+                                    reagendado_em: ""
+                                });
+                            }
+                        }
+                    }
+
+                    if (listagemValida.length === 0) {
+                        showToast('Nenhum registro correspondente aos critérios foi encontrado.', 'error');
+                        return;
+                    }
+
+                    state.servicos = listagemValida;
+                    atualizarDropdownsFiltros();
+                    renderizarPainelETabela();
+                    salvarDadosLocais();
+                    showToast(`${listagemValida.length} registros filtrados carregados!`, 'success');
+
+                } catch (err) {
+                    console.error(err);
+                    showToast('Erro interno ao mapear colunas do arquivo.', 'error');
                 }
             };
-            reader.readAsBinaryString(file);
-            this.value = '';
-        });
+            reader.readAsArrayBuffer(file);
+        }
 
-        function applyFilters() {
-            const os = document.getElementById('fOS').value.toLowerCase();
-            const cli = document.getElementById('fCli').value.toLowerCase();
-            const dt = document.getElementById('fDate').value;
-            const ci = document.getElementById('fCity').value;
-            const se = document.getElementById('fServ').value;
-
-            filteredData = allData.filter(i => {
-                return i.os.toLowerCase().includes(os) &&
-                       i.cliente.toLowerCase().includes(cli) &&
-                       (dt === "" || i.dataISO === dt) &&
-                       (ci === "" || i.cidade === ci) &&
-                       (se === "" || i.tipo === se);
+        function filtrarDados() {
+            return state.servicos.filter(item => {
+                const matchBusca = item.cod_os.toLowerCase().includes(state.filtros.busca) || 
+                                   item.cliente.toLowerCase().includes(state.filtros.busca) || 
+                                   item.tipo_servico.toLowerCase().includes(state.filtros.busca) || 
+                                   item.ocorrencia_contrato.toLowerCase().includes(state.filtros.busca);
+                const matchCidade = state.filtros.cidade === "" || item.cidade === state.filtros.cidade;
+                const matchEquipe = state.filtros.equipe === "" || item.nome_equipe === state.filtros.equipe;
+                return matchBusca && matchCidade && matchEquipe;
+            }).sort((a, b) => {
+                let valA = a[state.ordenacao.coluna];
+                let valB = b[state.ordenacao.coluna];
+                if (state.ordenacao.ordem === 'desc') return valB.localeCompare(valA, undefined, {numeric: true});
+                return valA.localeCompare(valB, undefined, {numeric: true});
             });
-            render();
         }
 
-        function render() {
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = '';
+        function renderizarPainelETabela() {
+            const dadosFiltrados = filtrarDados();
+            
+            const total = state.servicos.length;
+            const reagendados = state.servicos.filter(s => s.reagendado).length;
+            const pendentes = total - reagendados;
+            const eficiencia = total > 0 ? Math.round((reagendados / total) * 100) : 0;
 
-            filteredData.forEach(item => {
-                const isDone = item.status === 'ABERTO';
-                const tr = document.createElement('tr');
-                if (isDone) tr.classList.add('row-opened');
-
-                tr.innerHTML = `
-                    <td><strong>${item.os}</strong></td>
-                    <td>${item.dataStr}</td>
-                    <td>${item.cliente}</td>
-                    <td>${item.cidade}</td>
-                    <td>${item.tipo}</td>
-                    <td>${item.equipe}</td>
-                    <td><div class="txt-full">${item.ocorrência}</div></td>
-                    <td><span class="badge ${isDone ? 'badge-opened' : 'badge-pending'}">${item.status}</span></td>
-                    <td style="text-align: right;">
-                        <button class="btn btn-sm ${isDone ? 'btn-outline' : 'btn-primary'}" onclick="toggleStatus('${item.id}')">
-                            <i class="fas ${isDone ? 'fa-undo' : 'fa-check'}"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            updateStats();
-        }
-
-        async function toggleStatus(id) {
-            const index = allData.findIndex(item => item.id === id);
-            if (index !== -1) {
-                allData[index].status = allData[index].status === 'ABERTO' ? 'PENDENTE' : 'ABERTO';
-                render();
-                await syncToCloud(); // Empurra instantaneamente para a nuvem
-            }
-        }
-
-        async function massMark() {
-            filteredData.forEach(item => {
-                const index = allData.findIndex(i => i.id === item.id);
-                if (index !== -1) allData[index].status = 'ABERTO';
-            });
-            render();
-            await syncToCloud();
-        }
-
-        function formatDT(d) {
-            const date = new Date(d);
-            return isNaN(date) ? d : date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-        }
-
-        function updateStats() {
-            const total = allData.length;
-            const opCount = allData.filter(i => i.status === 'ABERTO').length;
             document.getElementById('stat-total').innerText = total;
-            document.getElementById('stat-pending').innerText = total - opCount;
-            document.getElementById('stat-opened').innerText = opCount;
+            document.getElementById('stat-reagendados').innerText = reagendados;
+            document.getElementById('stat-pendentes').innerText = pendentes;
+            document.getElementById('stat-eficiencia').innerText = `${eficiencia}%`;
+
+            const totalPaginas = Math.ceil(dadosFiltrados.length / state.paginacao.limitePorPagina) || 1;
+            const inicio = (state.paginacao.paginaAtual - 1) * state.paginacao.limitePorPagina;
+            const fim = inicio + state.paginacao.limitePorPagina;
+            const dadosPaginados = dadosFiltrados.slice(inicio, fim);
+
+            document.getElementById('pagination-info').innerText = `Mostrando ${dadosFiltrados.length > 0 ? inicio + 1 : 0} até ${Math.min(fim, dadosFiltrados.length)} de ${dadosFiltrados.length} registros`;
+
+            const tbody = document.getElementById('table-body');
+            if(dadosPaginados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Nenhum serviço localizado para os filtros aplicados.</td></tr>`;
+                renderizarControlesPaginacao(totalPaginas);
+                return;
+            }
+
+            tbody.innerHTML = dadosPaginados.map(item => `
+                <tr id="${item.id}" class="hover:bg-slate-100/60 dark:hover:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/50 ${item.reagendado ? 'row-reagendada' : ''}">
+                    <td class="p-5 font-mono font-black text-sm ${item.reagendado ? 'text-emerald-800 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}">${item.cod_os}</td>
+                    <td class="p-5 font-bold ${item.reagendado ? 'text-emerald-950 dark:text-emerald-100' : 'text-slate-900 dark:text-white'}">${item.cliente}</td>
+                    <td class="p-5"><span class="${item.reagendado ? 'bg-emerald-200/50 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'} px-3 py-1.5 rounded-lg text-sm font-bold">${item.cidade}</span></td>
+                    <td class="p-5 font-semibold text-sm ${item.reagendado ? 'text-emerald-900 dark:text-emerald-300' : 'text-slate-900 dark:text-slate-200'}">${item.tipo_servico}</td>
+                    <td class="p-5 text-sm font-medium ${item.reagendado ? 'text-emerald-800 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}"><i class="fa-solid fa-truck-pickup mr-1 opacity-70"></i>${item.nome_equipe}</td>
+                    <td class="p-5 text-sm break-words leading-relaxed font-medium ${item.reagendado ? 'text-emerald-900/90 dark:text-emerald-300/80' : 'text-slate-600 dark:text-slate-300'}">${item.ocorrencia_contrato || '-'}</td>
+                    <td class="p-5 text-center">
+                        ${item.reagendado ? `
+                            <div class="flex flex-col items-center justify-center gap-1 text-emerald-700 dark:text-emerald-400">
+                                <span class="inline-flex items-center gap-1 bg-emerald-600 dark:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm"><i class="fa-solid fa-check-double"></i> Reagendado</span>
+                                <span class="text-[11px] font-bold ${item.reagendado ? 'text-emerald-800 dark:text-emerald-400/70' : 'text-slate-400'}">Por: ${item.reagendado_por || 'Sistema'} em ${item.reagendado_em}</span>
+                            </div>
+                        ` : `
+                            <button onclick="marcarReagendado('${item.id}')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-1 mx-auto tracking-wide uppercase">
+                               <i class="fa-regular fa-calendar-plus text-sm"></i> Concluir
+                            </button>
+                        `}
+                    </td>
+                </tr>
+            `).join('');
+
+            renderizarControlesPaginacao(totalPaginas);
         }
 
-        function updateDrops() {
-            const cities = [...new Set(allData.map(i => i.cidade))].sort();
-            const services = [...new Set(allData.map(i => i.tipo))].sort();
-            document.getElementById('fCity').innerHTML = '<option value="">Cidade</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('fServ').innerHTML = '<option value="">Serviço</option>' + services.map(s => `<option value="${s}">${s}</option>`).join('');
+        function marcarReagendado(id) {
+            const index = state.servicos.findIndex(s => s.id === id);
+            if(index === -1) return;
+
+            const agora = new Date();
+            const dataFormatada = `${agora.toLocaleDateString()} ${agora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            
+            let operadorAtual = localStorage.getItem('isp_operator_name') || state.usuarioLogado || 'Operador';
+
+            state.servicos[index].reagendado = true;
+            state.servicos[index].reagendado_por = operadorAtual;
+            state.servicos[index].reagendado_em = dataFormatada;
+
+            renderizarPainelETabela();
+            salvarDadosLocais();
+            showToast(`O.S ${state.servicos[index].cod_os} atualizada por ${operadorAtual}!`, 'success');
         }
 
-        function showToast(m) { 
-            const t = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = m;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 3000);
+        function atualizarDropdownsFiltros() {
+            const cities = [...new Set(state.servicos.map(s => s.cidade))].filter(Boolean).sort();
+            const teams = [...new Set(state.servicos.map(s => s.nome_equipe))].filter(Boolean).sort();
+
+            document.getElementById('filter-cidade').innerHTML = '<option value="">Todas as Cidades</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('filter-equipe').innerHTML = '<option value="">Todas as Equipes</option>' + teams.map(e => `<option value="${e}">${e}</option>`).join('');
         }
 
-        function limparTudo() {
-            if(confirm("Zerar todos os dados da nuvem? Isso apagará para todos os colaboradores.")) {
-                allData = [];
-                syncToCloud();
-                location.reload();
+        function renderizarControlesPaginacao(totalPaginas) {
+            document.getElementById('prev-page').disabled = state.paginacao.paginaAtual === 1;
+            document.getElementById('next-page').disabled = state.paginacao.paginaAtual === totalPaginas;
+
+            const container = document.getElementById('page-numbers');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= totalPaginas; i++) {
+                if(i === 1 || i === totalPaginas || (i >= state.paginacao.paginaAtual - 1 && i <= state.paginacao.paginaAtual + 1)) {
+                    const btn = document.createElement('button');
+                    btn.className = `px-3.5 py-1.5 text-sm rounded-xl border font-black transition-all ${state.paginacao.paginaAtual === i ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`;
+                    btn.innerText = i;
+                    btn.addEventListener('click', () => {
+                        state.paginacao.paginaAtual = i;
+                        renderizarPainelETabela();
+                    });
+                    container.appendChild(btn);
+                } else if (i === 2 || i === totalPaginas - 1) {
+                    const span = document.createElement('span');
+                    span.className = "px-2 text-slate-400 font-bold";
+                    span.innerText = "...";
+                    container.appendChild(span);
+                }
             }
         }
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('collapsed');
-            document.getElementById('sidebar').classList.toggle('active');
-            document.getElementById('main-content').classList.toggle('expanded');
+        function salvarDadosLocais() {
+            localStorage.setItem('isp_local_data', JSON.stringify(state.servicos));
         }
 
-        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
-
-        function clearFilters() {
-            document.querySelectorAll('.filters-grid input, .filters-grid select').forEach(el => el.value = '');
-            applyFilters();
+        function recuperarDadosLocais() {
+            const cache = localStorage.getItem('isp_local_data');
+            if (cache) {
+                state.servicos = JSON.parse(cache);
+                atualizarDropdownsFiltros();
+                renderizarPainelETabela();
+            }
         }
 
-        function exportExcel() {
-            const ws = XLSX.utils.json_to_sheet(allData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Dados");
-            XLSX.writeFile(wb, "Controle_ISP_Geral.xlsx");
+        function exportarReagendados() {
+            const filtrados = state.servicos.filter(s => s.reagendado);
+            if(filtrados.length === 0) {
+                showToast('Nenhum serviço marcado como reagendado para exportar.', 'info');
+                return;
+            }
+
+            const exportData = filtrados.map(s => ({
+                "Código O.S": s.cod_os,
+                "Cliente": s.cliente,
+                "Cidade": s.cidade,
+                "Tipo de Serviço": s.tipo_servico,
+                "Nome da Equipe": s.nome_equipe,
+                "Ocorrência do Contrato": s.ocorrencia_contrato,
+                "Reagendado Por": s.reagendado_por,
+                "Data Reagendamento": s.reagendado_em
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Reagendados");
+            
+            XLSX.writeFile(workbook, `reagendamentos_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('Planilha de reagendados exportada!', 'success');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgType = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-blue-600';
+            let icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : type === 'error' ? '<i class="fa-solid fa-circle-exclamation"></i>' : '<i class="fa-solid fa-circle-info"></i>';
+
+            toast.className = `${bgType} text-white px-5 py-3.5 rounded-xl shadow-xl font-bold text-base toast-slide-in flex items-center gap-2 transition-all duration-300`;
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
     </script>
 </body>
