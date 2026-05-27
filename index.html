@@ -88,6 +88,11 @@
 
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3"></div>
 
+    <div id="sync-indicator" class="fixed bottom-5 right-5 z-40 bg-slate-900/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 border border-slate-700/50 backdrop-blur-sm transition-all opacity-0 pointer-events-none">
+        <i class="fa-solid fa-cloud-arrow-up text-blue-400 animate-pulse"></i>
+        <span id="sync-text">Sincronizando...</span>
+    </div>
+
     <div class="flex min-h-screen overflow-hidden">
         
         <aside id="sidebar" class="w-64 bg-white dark:bg-darkCard border-r border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-between hidden md:flex relative flex-shrink-0">
@@ -141,7 +146,7 @@
                     </div>
                     <div class="sidebar-text whitespace-nowrap">
                         <p class="font-bold text-base" id="user-name-display">Carregando...</p>
-                        <span class="text-xs text-slate-400" id="connection-status-text">Painel Ativo</span>
+                        <span class="text-xs text-slate-400" id="connection-status-text">Nuvem Online</span>
                     </div>
                 </div>
                 
@@ -162,9 +167,9 @@
                     <h1 class="font-bold text-md">ISP Control</h1>
                 </div>
                 <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium">
+                    <div id="live-indicator" class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium">
                         <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <span>Controle Interno</span>
+                        <span id="live-indicator-text">Sincronizado</span>
                     </div>
                 </div>
             </header>
@@ -233,8 +238,8 @@
                             </thead>
                             <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
                                 <tr>
-                                    <td colspan="7" class="p-10 text-center text-slate-400 font-semibold">
-                                        Nenhum registro carregado. Importe uma planilha excel para iniciar.
+                                    <td colspan="7" class="p-10 text-center text-slate-400 font-semibold" id="initial-loading-text">
+                                        Conectando à nuvem... Aguarde um instante.
                                     </td>
                                 </tr>
                             </tbody>
@@ -257,6 +262,10 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <script>
+        // Configuração segura e direta do JSONbin fornecido por você
+        const API_URL = "https://api.jsonbin.io/v3/b/696fe1e1ae596e708fe97dbb";
+        const API_KEY = "$2a$10$Q2kXyLLkTCC5B3yZji9a3.DpwGfIxqoCxivdXlEX95CSREglkI/xG";
+
         const SERVICOS_PERMITIDOS = [
             "BL-SUPORTE", "BL-MANUTENÇÃO", "MESH-INSTALAÇÃO", "MESH-INSTALAÇÃO COM TROCA",
             "MESH-INSTALAÇÃO SEM TROCA", "MESH-MUDANÇA DE CÔMODO", "BL-INSTALAÇÃO",
@@ -277,14 +286,71 @@
             definirUsuario();
             configurarComponentes();
             configurarSidebarRetratil();
-            recuperarDadosLocais();
             
-            window.addEventListener('storage', (e) => {
-                if (e.key === 'isp_local_data') {
-                    recuperarDadosLocais();
-                }
-            });
+            // Puxa os dados da nuvem na hora
+            baixarDadosNuvem();
+
+            // Sincroniza em segundo plano a cada 10 segundos
+            setInterval(baixarDadosNuvem, 10000);
         });
+
+        function showSync(exibir, texto = "Sincronizando...") {
+            const el = document.getElementById('sync-indicator');
+            const txt = document.getElementById('sync-text');
+            if (exibir) {
+                txt.innerText = texto;
+                el.style.opacity = '1';
+            } else {
+                el.style.opacity = '0';
+            }
+        }
+
+        async function baixarDadosNuvem() {
+            try {
+                const res = await fetch(`${API_URL}/latest`, {
+                    method: 'GET',
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                if (!res.ok) throw new Error('Falha ao obter nuvem');
+                const data = await res.json();
+                
+                // Se a nuvem tiver dados estruturados válidos, preenche
+                if (data.record && Array.isArray(data.record.servicos)) {
+                    state.servicos = data.record.servicos;
+                    atualizarDropdownsFiltros();
+                    renderizarPainelETabela();
+                    
+                    document.getElementById('live-indicator-text').innerText = "Sincronizado";
+                    document.getElementById('live-indicator').className = "flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium";
+                } else {
+                    document.getElementById('table-body').innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Banco na nuvem vazio. Importe uma planilha técnica para começar!</td></tr>`;
+                }
+            } catch (err) {
+                console.error("Erro na sincronização:", err);
+                document.getElementById('live-indicator-text').innerText = "Erro de Conexão";
+                document.getElementById('live-indicator').className = "flex items-center gap-2 bg-rose-100 dark:bg-rose-950/40 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-medium";
+            }
+        }
+
+        async function enviarDadosNuvem() {
+            showSync(true, "Salvando na nuvem...");
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': API_KEY
+                    },
+                    body: JSON.stringify({ servicos: state.servicos })
+                });
+                if (!res.ok) throw new Error('Falha ao atualizar nuvem');
+                showSync(false);
+            } catch (err) {
+                console.error(err);
+                showSync(true, "Erro ao salvar na nuvem!");
+                setTimeout(() => showSync(false), 3000);
+            }
+        }
 
         function definirUsuario(forçarTroca = false) {
             let user = localStorage.getItem('isp_operator_name');
@@ -307,7 +373,6 @@
 
             toggleBtn.addEventListener('click', () => {
                 const estaColapsado = sidebar.classList.contains('w-20');
-                
                 if (estaColapsado) {
                     sidebar.classList.remove('w-20', 'p-4');
                     sidebar.classList.add('w-64', 'p-6');
@@ -388,7 +453,6 @@
                 .replace(/\(\s*\d+\s*\)/g, '')     
                 .replace(/\s+/g, ' ')              
                 .trim();
-            
             return limpo.length > 0 ? limpo : String(txt).trim();
         }
 
@@ -399,16 +463,16 @@
             showToast('Processando planilha técnica...', 'info');
             const reader = new FileReader();
 
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array', cellFormula: false, cellHTML: false });
+                    const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
                     const sheet = workbook.Sheets[sheetName];
                     
                     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
                     if (rows.length < 2) {
-                        showToast('Planilha vazia ou sem dados válidos.', 'error');
+                        showToast('Planilha sem dados válidos.', 'error');
                         return;
                     }
 
@@ -418,17 +482,13 @@
                     const idxCliente = headers.findIndex(h => h === 'cliente' || h === 'nome' || h === 'nomecliente');
                     const idxCidade = headers.findIndex(h => h.includes('cidade') || h.includes('municipio'));
                     const idxServico = headers.findIndex(h => h === 'tipodeservico' || h === 'servico' || h === 'tipo' || h.includes('descricao'));
-                    
                     let idxEquipe = headers.findIndex(h => (h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador')) && !h.includes('id') && !h.includes('cod'));
-                    if (idxEquipe === -1) {
-                        idxEquipe = headers.findIndex(h => h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador'));
-                    }
-                    
+                    if (idxEquipe === -1) idxEquipe = headers.findIndex(h => h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador'));
                     const idxOcorrencia = headers.findIndex(h => h.includes('ocorrencia'));
                     const idxEncerramento = headers.findIndex(h => h.includes('encerramento') || h.includes('encerr') || h.includes('codigo'));
 
                     if (idxOs === -1 || idxEncerramento === -1) {
-                        showToast('Colunas obrigatórias não foram detectadas no mapeamento.', 'error');
+                        showToast('Colunas obrigatórias não detectadas.', 'error');
                         return;
                     }
 
@@ -445,7 +505,6 @@
                             let clienteBruto = idxCliente !== -1 ? String(row[idxCliente]).trim() : "";
                             let servicoBruto = idxServico !== -1 ? String(row[idxServico]).trim() : "";
                             let equipeBruta = idxEquipe !== -1 ? String(row[idxEquipe]).trim() : "";
-
                             let servicoLimpo = limparTextoBruto(servicoBruto, "Técnico");
 
                             if (SERVICOS_PERMITIDOS.includes(servicoLimpo.toUpperCase())) {
@@ -466,19 +525,21 @@
                     }
 
                     if (listagemValida.length === 0) {
-                        showToast('Nenhum registro correspondente aos critérios foi encontrado.', 'error');
+                        showToast('Nenhum registro correspondente foi encontrado.', 'error');
                         return;
                     }
 
                     state.servicos = listagemValida;
                     atualizarDropdownsFiltros();
                     renderizarPainelETabela();
-                    salvarDadosLocais();
-                    showToast(`${listagemValida.length} registros filtrados carregados!`, 'success');
+                    
+                    // Envia os dados importados imediatamente para a nuvem
+                    await enviarDadosNuvem();
+                    showToast(`${listagemValida.length} registros integrados em nuvem!`, 'success');
 
                 } catch (err) {
                     console.error(err);
-                    showToast('Erro interno ao mapear colunas do arquivo.', 'error');
+                    showToast('Erro interno ao mapear arquivo.', 'error');
                 }
             };
             reader.readAsArrayBuffer(file);
@@ -540,7 +601,7 @@
                         ${item.reagendado ? `
                             <div class="flex flex-col items-center justify-center gap-1 text-emerald-700 dark:text-emerald-400">
                                 <span class="inline-flex items-center gap-1 bg-emerald-600 dark:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm"><i class="fa-solid fa-check-double"></i> Reagendado</span>
-                                <span class="text-[11px] font-bold ${item.reagendado ? 'text-emerald-800 dark:text-emerald-400/70' : 'text-slate-400'}">Por: ${item.reagendado_por || 'Sistema'} em ${item.reagendado_em}</span>
+                                <span class="text-[11px] font-bold text-emerald-800 dark:text-emerald-400/70">Por: ${item.reagendado_por || 'Sistema'} em ${item.reagendado_em}</span>
                             </div>
                         ` : `
                             <button onclick="marcarReagendado('${item.id}')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-1 mx-auto tracking-wide uppercase">
@@ -554,13 +615,12 @@
             renderizarControlesPaginacao(totalPaginas);
         }
 
-        function marcarReagendado(id) {
+        async function marcarReagendado(id) {
             const index = state.servicos.findIndex(s => s.id === id);
             if(index === -1) return;
 
             const agora = new Date();
             const dataFormatada = `${agora.toLocaleDateString()} ${agora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-            
             let operadorAtual = localStorage.getItem('isp_operator_name') || state.usuarioLogado || 'Operador';
 
             state.servicos[index].reagendado = true;
@@ -568,8 +628,10 @@
             state.servicos[index].reagendado_em = dataFormatada;
 
             renderizarPainelETabela();
-            salvarDadosLocais();
-            showToast(`O.S ${state.servicos[index].cod_os} atualizada por ${operadorAtual}!`, 'success');
+            
+            // Salva na nuvem na mesma hora!
+            await enviarDadosNuvem();
+            showToast(`O.S ${state.servicos[index].cod_os} atualizada e salva na nuvem por ${operadorAtual}!`, 'success');
         }
 
         function atualizarDropdownsFiltros() {
@@ -603,19 +665,6 @@
                     span.innerText = "...";
                     container.appendChild(span);
                 }
-            }
-        }
-
-        function salvarDadosLocais() {
-            localStorage.setItem('isp_local_data', JSON.stringify(state.servicos));
-        }
-
-        function recuperarDadosLocais() {
-            const cache = localStorage.getItem('isp_local_data');
-            if (cache) {
-                state.servicos = JSON.parse(cache);
-                atualizarDropdownsFiltros();
-                renderizarPainelETabela();
             }
         }
 
