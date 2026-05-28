@@ -510,6 +510,14 @@
                         return;
                     }
 
+                    // Cria um Map indexado para preservar a marcação das O.S. que já existem na tela
+                    const servicosAntigosMap = new Map();
+                    if (Array.isArray(state.servicos)) {
+                        state.servicos.forEach(s => {
+                            servicosAntigosMap.set(String(s.cod_os).trim(), s);
+                        });
+                    }
+
                     const listagemValida = [];
 
                     for (let i = 1; i < rows.length; i++) {
@@ -526,17 +534,21 @@
                             let servicoLimpo = limparTextoBruto(servicoBruto, "Técnico");
 
                             if (SERVICOS_PERMITIDOS.includes(servicoLimpo.toUpperCase())) {
+                                const codOsAtual = String(row[idxOs]).trim();
+                                const jaExistia = servicosAntigosMap.get(codOsAtual);
+
                                 listagemValida.push({
-                                    id: 'os_' + String(row[idxOs]).trim(), 
-                                    cod_os: String(row[idxOs]).trim(),
+                                    id: 'os_' + codOsAtual, 
+                                    cod_os: codOsAtual,
                                     cliente: limparTextoBruto(clienteBruto, "Não Informado"),
                                     cidade: (idxCidade !== -1 && row[idxCidade]) ? String(row[idxCidade]).trim() : "Geral",
                                     tipo_servico: servicoLimpo,
                                     nome_equipe: limparTextoBruto(equipeBruta, "Sem Equipe"),
                                     ocorrencia_contrato: (idxOcorrencia !== -1 && row[idxOcorrencia]) ? String(row[idxOcorrencia]).trim() : "-",
-                                    reagendado: false,
-                                    reagendado_por: "",
-                                    reagendado_em: ""
+                                    // Preserva o estado de marcação se ele já existir na memória local
+                                    reagendado: jaExistia ? jaExistia.reagendado : false,
+                                    reagendado_por: jaExistia ? jaExistia.reagendado_por : "",
+                                    reagendado_em: jaExistia ? jaExistia.reagendado_em : ""
                                 });
                             }
                         }
@@ -551,64 +563,107 @@
                     atualizarDropdownsFiltros();
                     renderizarPainelETabela();
                     
+                    showToast(`${listagemValida.length} registros integrados com sucesso!`, 'success');
                     await enviarDadosNuvem();
-                    showToast(`${listagemValida.length} registros integrados em nuvem!`, 'success');
 
                 } catch (err) {
                     console.error(err);
-                    showToast('Erro interno ao mapear arquivo.', 'error');
+                    showToast('Erro ao processar o arquivo Excel.', 'error');
                 }
             };
+
             reader.readAsArrayBuffer(file);
         }
 
-        function filtrarDados() {
-            return state.servicos.filter(item => {
-                const matchBusca = item.cod_os.toLowerCase().includes(state.filtros.busca) || 
-                                   item.cliente.toLowerCase().includes(state.filtros.busca) || 
-                                   item.tipo_servico.toLowerCase().includes(state.filtros.busca) || 
-                                   item.ocorrencia_contrato.toLowerCase().includes(state.filtros.busca);
-                const matchCidade = state.filtros.cidade === "" || item.cidade === state.filtros.cidade;
-                const matchEquipe = state.filtros.equipe === "" || item.nome_equipe === state.filtros.equipe;
-                return matchBusca && matchCidade && matchEquipe;
-            });
+        function alternarStatusReagendamento(codOs) {
+            const index = state.servicos.findIndex(s => String(s.cod_os).trim() === String(codOs).trim());
+            if (index === -1) return;
+
+            const item = state.servicos[index];
+            if (!item.reagendado) {
+                item.reagendado = true;
+                item.reagendado_por = state.usuarioLogado;
+                item.reagendado_em = new Date().toLocaleString('pt-BR');
+                showToast(`O.S. ${codOs} marcada como Reagendada!`, 'success');
+            } else {
+                item.reagendado = false;
+                item.reagendado_por = "";
+                item.reagendado_em = "";
+                showToast(`Marcação da O.S. ${codOs} removida.`, 'info');
+            }
+
+            renderizarPainelETabela();
+            enviarDadosNuvem();
         }
 
         function atualizarDropdownsFiltros() {
-            const cidades = [...new Set(state.servicos.map(s => s.cidade))].sort();
-            const equipes = [...new Set(state.servicos.map(s => s.nome_equipe))].sort();
+            const cidades = new Set();
+            const equipes = new Set();
+
+            state.servicos.forEach(s => {
+                if(s.cidade) cidades.add(s.cidade.toUpperCase());
+                if(s.nome_equipe) equipes.add(s.nome_equipe.toUpperCase());
+            });
 
             const selectCidade = document.getElementById('filter-cidade');
             const selectEquipe = document.getElementById('filter-equipe');
 
-            const valCidadeAntigo = selectCidade.value;
-            const valEquipeAntigo = selectEquipe.value;
+            const valorCidadeAntigo = selectCidade.value;
+            const valorEquipeAntigo = selectEquipe.value;
 
             selectCidade.innerHTML = '<option value="">Todas as Cidades</option>';
-            cidades.forEach(c => selectCidade.innerHTML += `<option value="${c}">${c}</option>`);
+            Array.from(cidades).sort().forEach(c => {
+                selectCidade.innerHTML += `<option value="${c}">${c}</option>`;
+            });
 
             selectEquipe.innerHTML = '<option value="">Todas as Equipes</option>';
-            equipes.forEach(e => selectEquipe.innerHTML += `<option value="${e}">${e}</option>`);
+            Array.from(equipes).sort().forEach(e => {
+                selectEquipe.innerHTML += `<option value="${e}">${e}</option>`;
+            });
 
-            selectCidade.value = cidades.includes(valCidadeAntigo) ? valCidadeAntigo : "";
-            selectEquipe.value = equipes.includes(valEquipeAntigo) ? valEquipeAntigo : "";
+            selectCidade.value = cidades.has(valorCidadeAntigo) ? valorCidadeAntigo : "";
+            selectEquipe.value = equipes.has(valorEquipeAntigo) ? valorEquipeAntigo : "";
+            
+            state.filtros.cidade = selectCidade.value;
+            state.filtros.equipe = selectEquipe.value;
+        }
+
+        function filtrarDados() {
+            return state.servicos.filter(s => {
+                const bateBusca = !state.filtros.busca || 
+                    String(s.cod_os).toLowerCase().includes(state.filtros.busca) ||
+                    String(s.cliente).toLowerCase().includes(state.filtros.busca) ||
+                    String(s.ocorrencia_contrato).toLowerCase().includes(state.filtros.busca);
+
+                const bateCidade = !state.filtros.cidade || String(s.cidade).toUpperCase() === state.filtros.cidade.toUpperCase();
+                const bateEquipe = !state.filtros.equipe || String(s.nome_equipe).toUpperCase() === state.filtros.equipe.toUpperCase();
+
+                return bateBusca && bateCidade && bateEquipe;
+            });
+        }
+
+        function ordenarDados(dados) {
+            const col = state.ordenacao.coluna;
+            const ordem = state.ordenacao.ordem === 'asc' ? 1 : -1;
+
+            return [...dados].sort((a, b) => {
+                let valA = a[col] ? String(a[col]).toLowerCase() : '';
+                let valB = b[col] ? String(b[col]).toLowerCase() : '';
+
+                if (!isNaN(valA) && !isNaN(valB)) {
+                    return (Number(valA) - Number(valB)) * ordem;
+                }
+                return valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' }) * ordem;
+            });
         }
 
         function renderizarPainelETabela() {
-            let dados = filtrarDados();
+            const dadosFiltrados = filtrarDados();
+            const dadosOrdenados = ordenarDados(dadosFiltrados);
 
-            // Ordenação
-            const col = state.ordenacao.coluna;
-            const ordem = state.ordenacao.ordem === 'asc' ? 1 : -1;
-            dados.sort((a, b) => {
-                if ((a[col] || '') < (b[col] || '')) return -1 * ordem;
-                if ((a[col] || '') > (b[col] || '')) return 1 * ordem;
-                return 0;
-            });
-
-            // Atualização de Cards de Estatísticas
-            const total = state.servicos.length;
-            const reagendados = state.servicos.filter(s => s.reagendado).length;
+            // Atualização dos Painéis de Contadores
+            const total = dadosFiltrados.length;
+            const reagendados = dadosFiltrados.filter(s => s.reagendado).length;
             const pendentes = total - reagendados;
             const eficiencia = total > 0 ? Math.round((reagendados / total) * 100) : 0;
 
@@ -617,116 +672,92 @@
             document.getElementById('stat-pendentes').innerText = pendentes;
             document.getElementById('stat-eficiencia').innerText = `${eficiencia}%`;
 
-            // Paginação
+            // Tratamento da Paginação
             const limite = state.paginacao.limitePorPagina;
-            const totalPaginas = Math.ceil(dados.length / limite) || 1;
-            if (state.paginacao.paginaAtual > totalPaginas) state.paginacao.paginaAtual = totalPaginas;
+            const totalPaginas = Math.ceil(total / limite) || 1;
             
+            if (state.paginacao.paginaAtual > totalPaginas) {
+                state.paginacao.paginaAtual = totalPaginas;
+            }
+
             const inicio = (state.paginacao.paginaAtual - 1) * limite;
             const fim = inicio + limite;
-            const dadosPaginados = dados.slice(inicio, fim);
+            const dadosPaginados = dadosOrdenados.slice(inicio, fim);
 
-            document.getElementById('pagination-info').innerText = `Mostrando ${dados.length > 0 ? inicio + 1 : 0} até ${Math.min(fim, dados.length)} de ${dados.length} registros`;
+            document.getElementById('pagination-info').innerText = `Mostrando ${total > 0 ? inicio + 1 : 0} até ${Math.min(fim, total)} de ${total} registros`;
+
+            // Renderizar numeração de páginas
+            const containerPaginas = document.getElementById('page-numbers');
+            containerPaginas.innerHTML = '';
             
+            for (let i = 1; i <= totalPaginas; i++) {
+                const ativo = i === state.paginacao.paginaAtual;
+                containerPaginas.innerHTML += `
+                    <button onclick="mudarPaginaDireto(${i})" class="w-8 h-8 flex items-center justify-center rounded-lg border text-xs font-bold transition-all ${ativo ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}" >${i}</button>
+                `;
+            }
+
             document.getElementById('prev-page').disabled = state.paginacao.paginaAtual === 1;
             document.getElementById('next-page').disabled = state.paginacao.paginaAtual === totalPaginas;
 
-            // Renderizar números de páginas
-            const containerPaginas = document.getElementById('page-numbers');
-            containerPaginas.innerHTML = '';
-            for (let i = 1; i <= totalPaginas; i++) {
-                if (i === 1 || i === totalPaginas || (i >= state.paginacao.paginaAtual - 1 && i <= state.paginacao.paginaAtual + 1)) {
-                    const btn = document.createElement('button');
-                    btn.className = `px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${state.paginacao.paginaAtual === i ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'}`;
-                    btn.innerText = i;
-                    btn.addEventListener('click', () => {
-                        state.paginacao.paginaAtual = i;
-                        renderizarPainelETabela();
-                    });
-                    containerPaginas.appendChild(btn);
-                }
-            }
-
-            // Tabela Body
+            // Renderização das Linhas da Tabela
             const tbody = document.getElementById('table-body');
-            tbody.innerHTML = '';
-
             if (dadosPaginados.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Nenhum serviço localizado para os filtros atuais.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
                 return;
             }
 
-            dadosPaginados.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = `border-b border-slate-200 dark:border-slate-800/60 text-sm hover:bg-slate-100/50 dark:hover:bg-slate-800/40 ${item.reagendado ? 'row-reagendada' : ''}`;
-                
-                let acaoBtn = '';
-                if (item.reagendado) {
-                    acaoBtn = `
-                        <div class="flex flex-col items-center gap-0.5">
-                            <span class="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-500 text-xs px-2.5 py-1 rounded-full font-bold">
-                                <i class="fa-solid fa-check"></i> Reagendado
-                            </span>
-                            <span class="text-[10px] text-slate-400 font-medium tracking-tight max-w-[120px] truncate" title="${item.reagendado_por}">Por: ${item.reagendado_por}</span>
-                        </div>
-                    `;
-                } else {
-                    acaoBtn = `
-                        <button onclick="marcarComoReagendado('${item.id}')" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 active:scale-95 transition-all whitespace-nowrap">
-                            <i class="fa-solid fa-calendar-plus mr-1"></i> Reagendar
-                        </button>
-                    `;
-                }
+            tbody.innerHTML = '';
+            dadosPaginados.forEach(s => {
+                const classeReagendado = s.reagendado ? 'row-reagendada' : '';
+                const botaoAcao = s.reagendado 
+                    ? `<button onclick="alternarStatusReagendamento('${s.cod_os}')" class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex flex-col items-center gap-0.5 mx-auto shadow-sm"><span class="flex items-center gap-1"><i class="fa-solid fa-check"></i> Reagendado</span><span class="text-[9px] font-medium opacity-70">Por: ${s.reagendado_por || 'Nuvem'}</span></button>`
+                    : `<button onclick="alternarStatusReagendamento('${s.cod_os}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 mx-auto shadow-md shadow-blue-500/10"><i class="fa-solid fa-calendar-plus"></i> Reagendar</button>`;
 
-                tr.innerHTML = `
-                    <td class="p-5 font-bold tracking-wider text-slate-400 dark:text-slate-500">${item.cod_os}</td>
-                    <td class="p-5 font-bold text-slate-700 dark:text-slate-200">${item.cliente}</td>
-                    <td class="p-5 font-semibold">${item.cidade}</td>
-                    <td class="p-5 font-medium"><span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">${item.tipo_servico}</span></td>
-                    <td class="p-5 font-semibold text-slate-600 dark:text-slate-400">${item.nome_equipe}</td>
-                    <td class="p-5 text-xs text-slate-500 dark:text-slate-400 font-medium max-w-[350px] break-words">${item.ocorrencia_contrato}</td>
-                    <td class="p-5 text-center">${acaoBtn}</td>
+                tbody.innerHTML += `
+                    <tr class="${classeReagendado} hover:bg-slate-100/40 dark:hover:bg-slate-800/30">
+                        <td class="p-5 font-mono text-sm font-bold">${s.cod_os}</td>
+                        <td class="p-5 font-black text-sm uppercase tracking-wide">${s.cliente}</td>
+                        <td class="p-5 font-bold text-xs text-slate-400 uppercase">${s.cidade}</td>
+                        <td class="p-5">
+                            <span class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-extrabold border border-slate-200 dark:border-slate-700/50">${s.tipo_servico}</span>
+                        </td>
+                        <td class="p-5 text-sm font-medium text-slate-400 uppercase">${s.nome_equipe}</td>
+                        <td class="p-5 text-xs font-normal text-slate-400 break-words max-w-[350px] leading-relaxed">${s.ocorrencia_contrato}</td>
+                        <td class="p-5 text-center">${botaoAcao}</td>
+                    </tr>
                 `;
-                tbody.appendChild(tr);
             });
         }
 
-        async function marcarComoReagendado(id) {
-            const index = state.servicos.findIndex(s => s.id === id);
-            if (index !== -1) {
-                state.servicos[index].reagendado = true;
-                state.servicos[index].reagendado_por = state.usuarioLogado;
-                state.servicos[index].reagendado_em = new Date().toLocaleString('pt-BR');
-                
-                renderizarPainelETabela();
-                showToast(`O.S. ${state.servicos[index].cod_os} marcada como reagendada!`, 'success');
-                await enviarDadosNuvem();
-            }
+        function mudarPaginaDireto(num) {
+            state.paginacao.paginaAtual = num;
+            renderizarPainelETabela();
         }
 
         function exportarReagendados() {
-            const filtrados = state.servicos.filter(s => s.reagendado);
-            if (filtrados.length === 0) {
-                showToast('Não há registros reagendados para exportação.', 'error');
+            const marcados = state.servicos.filter(s => s.reagendado);
+            if (marcados.length === 0) {
+                showToast('Não existem registros marcados como reagendados para exportar.', 'error');
                 return;
             }
 
-            const dadosExportacao = filtrados.map(s => ({
-                "Código O.S.": s.cod_os,
+            const dataExport = marcados.map(s => ({
+                "Cód. O.S": s.cod_os,
                 "Cliente": s.cliente,
                 "Cidade": s.cidade,
                 "Tipo de Serviço": s.tipo_servico,
-                "Equipe": s.nome_equipe,
-                "Ocorrência": s.ocorrencia_contrato,
+                "Nome Equipe": s.nome_equipe,
+                "Ocorrência do Contrato": s.ocorrencia_contrato,
                 "Reagendado Por": s.reagendado_por,
-                "Data/Hora": s.reagendado_em
+                "Data/Hora Marcação": s.reagendado_em
             }));
 
-            const worksheet = XLSX.utils.json_to_sheet(dadosExportacao);
+            const worksheet = XLSX.utils.json_to_sheet(dataExport);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Reagendados");
-            XLSX.writeFile(workbook, `ISP_Reagendados_${new Date().toISOString().split('T')[0]}.xlsx`);
-            showToast('Relatório baixado com sucesso!', 'success');
+            XLSX.writeFile(workbook, `Relatorio_Reagendamentos_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast(`${marcados.length} registros exportados com sucesso!`, 'success');
         }
     </script>
 </body>
