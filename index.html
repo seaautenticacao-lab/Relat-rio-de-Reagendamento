@@ -55,7 +55,6 @@
             transition: all 0.2s ease-in-out;
         }
 
-        /* VERDE BEM MAIS NÍTIDO E COM BORDA LATERAL */
         .row-reagendada {
             background-color: rgba(16, 185, 129, 0.15) !important;
             box-shadow: inset 6px 0 0 0 #10b981 !important;
@@ -262,7 +261,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <script>
-        // Configuração segura e direta do JSONbin fornecido por você
         const API_URL = "https://api.jsonbin.io/v3/b/6a18416621f9ee59d29552f8";
         const API_KEY = "$2a$10$cELknX09Hs.aM5tMbDb9SOLaCgHcJxPoGtFJYsRcAtlqScldQc1X.";
 
@@ -286,23 +284,39 @@
             definirUsuario();
             configurarComponentes();
             configurarSidebarRetratil();
-            
-            // Puxa os dados da nuvem na hora
             baixarDadosNuvem();
-
-            // Sincroniza em segundo plano a cada 10 segundos
-            setInterval(baixarDadosNuvem, 10000);
+            setInterval(baixarDadosNuvem, 30000); // 30 segundos mantém estabilidade de sincronismo
         });
 
         function showSync(exibir, texto = "Sincronizando...") {
             const el = document.getElementById('sync-indicator');
             const txt = document.getElementById('sync-text');
-            if (exibir) {
-                txt.innerText = texto;
-                el.style.opacity = '1';
-            } else {
-                el.style.opacity = '0';
+            if (el && txt) {
+                if (exibir) {
+                    txt.innerText = texto;
+                    el.style.opacity = '1';
+                } else {
+                    el.style.opacity = '0';
+                }
             }
+        }
+
+        function showToast(mensagem, tipo = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const bgClass = tipo === 'success' ? 'bg-emerald-600' : (tipo === 'error' ? 'bg-rose-600' : 'bg-blue-600');
+            const icon = tipo === 'success' ? 'fa-check-circle' : (tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
+            
+            const toast = document.createElement('div');
+            toast.className = `${bgClass} text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 font-medium text-sm toast-slide-in`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${mensagem}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
         }
 
         async function baixarDadosNuvem() {
@@ -314,7 +328,6 @@
                 if (!res.ok) throw new Error('Falha ao obter nuvem');
                 const data = await res.json();
                 
-                // Se a nuvem tiver dados estruturados válidos, preenche
                 if (data.record && Array.isArray(data.record.servicos)) {
                     state.servicos = data.record.servicos;
                     atualizarDropdownsFiltros();
@@ -327,8 +340,11 @@
                 }
             } catch (err) {
                 console.error("Erro na sincronização:", err);
-                document.getElementById('live-indicator-text').innerText = "Erro de Conexão";
-                document.getElementById('live-indicator').className = "flex items-center gap-2 bg-rose-100 dark:bg-rose-950/40 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-medium";
+                const indicator = document.getElementById('live-indicator-text');
+                if (indicator) {
+                    document.getElementById('live-indicator-text').innerText = "Erro de Conexão";
+                    document.getElementById('live-indicator').className = "flex items-center gap-2 bg-rose-100 dark:bg-rose-950/40 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-medium";
+                }
             }
         }
 
@@ -371,22 +387,24 @@
             const toggleIcon = document.getElementById('toggle-icon');
             const texts = document.querySelectorAll('.sidebar-text');
 
-            toggleBtn.addEventListener('click', () => {
-                const estaColapsado = sidebar.classList.contains('w-20');
-                if (estaColapsado) {
-                    sidebar.classList.remove('w-20', 'p-4');
-                    sidebar.classList.add('w-64', 'p-6');
-                    toggleIcon.className = "fa-solid fa-chevron-left text-xs";
-                    setTimeout(() => {
-                        texts.forEach(t => t.classList.remove('hidden'));
-                    }, 150);
-                } else {
-                    texts.forEach(t => t.classList.add('hidden'));
-                    sidebar.classList.remove('w-64', 'p-6');
-                    sidebar.classList.add('w-20', 'p-4');
-                    toggleIcon.className = "fa-solid fa-chevron-right text-xs";
-                }
-            });
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    const estaColapsado = sidebar.classList.contains('w-20');
+                    if (estaColapsado) {
+                        sidebar.classList.remove('w-20', 'p-4');
+                        sidebar.classList.add('w-64', 'p-6');
+                        toggleIcon.className = "fa-solid fa-chevron-left text-xs";
+                        setTimeout(() => {
+                            texts.forEach(t => t.classList.remove('hidden'));
+                        }, 150);
+                    } else {
+                        texts.forEach(t => t.classList.add('hidden'));
+                        sidebar.classList.remove('w-64', 'p-6');
+                        sidebar.classList.add('w-20', 'p-4');
+                        toggleIcon.className = "fa-solid fa-chevron-right text-xs";
+                    }
+                });
+            }
         }
 
         function configurarComponentes() {
@@ -478,17 +496,17 @@
 
                     const headers = rows[0].map(h => String(h).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim());
                     
-                    const idxOs = headers.findIndex(h => h === 'codos' || h === 'codigoos' || h.includes('os'));
+                    const idxOs = headers.findIndex(h => h === 'codos' || h === 'codigoos' || h === 'os' || h.includes('os'));
                     const idxCliente = headers.findIndex(h => h === 'cliente' || h === 'nome' || h === 'nomecliente');
                     const idxCidade = headers.findIndex(h => h.includes('cidade') || h.includes('municipio'));
                     const idxServico = headers.findIndex(h => h === 'tipodeservico' || h === 'servico' || h === 'tipo' || h.includes('descricao'));
                     let idxEquipe = headers.findIndex(h => (h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador')) && !h.includes('id') && !h.includes('cod'));
                     if (idxEquipe === -1) idxEquipe = headers.findIndex(h => h.includes('equipe') || h.includes('tecnico') || h.includes('colaborador'));
                     const idxOcorrencia = headers.findIndex(h => h.includes('ocorrencia'));
-                    const idxEncerramento = headers.findIndex(h => h.includes('encerramento') || h.includes('encerr') || h.includes('codigo'));
+                    const idxEncerramento = headers.findIndex(h => h.includes('encerramento') || h.includes('encerr') || h.includes('codigo') || h === 'codenc');
 
                     if (idxOs === -1 || idxEncerramento === -1) {
-                        showToast('Colunas obrigatórias não detectadas.', 'error');
+                        showToast('Colunas obrigatórias não detectadas (O.S. ou Encerramento).', 'error');
                         return;
                     }
 
@@ -525,7 +543,7 @@
                     }
 
                     if (listagemValida.length === 0) {
-                        showToast('Nenhum registro correspondente foi encontrado.', 'error');
+                        showToast('Nenhum registro com código 153 e serviço elegível encontrado.', 'error');
                         return;
                     }
 
@@ -533,7 +551,6 @@
                     atualizarDropdownsFiltros();
                     renderizarPainelETabela();
                     
-                    // Envia os dados importados imediatamente para a nuvem
                     await enviarDadosNuvem();
                     showToast(`${listagemValida.length} registros integrados em nuvem!`, 'success');
 
@@ -555,6 +572,161 @@
                 const matchEquipe = state.filtros.equipe === "" || item.nome_equipe === state.filtros.equipe;
                 return matchBusca && matchCidade && matchEquipe;
             });
+        }
+
+        function atualizarDropdownsFiltros() {
+            const cidades = [...new Set(state.servicos.map(s => s.cidade))].sort();
+            const equipes = [...new Set(state.servicos.map(s => s.nome_equipe))].sort();
+
+            const selectCidade = document.getElementById('filter-cidade');
+            const selectEquipe = document.getElementById('filter-equipe');
+
+            const valCidadeAntigo = selectCidade.value;
+            const valEquipeAntigo = selectEquipe.value;
+
+            selectCidade.innerHTML = '<option value="">Todas as Cidades</option>';
+            cidades.forEach(c => selectCidade.innerHTML += `<option value="${c}">${c}</option>`);
+
+            selectEquipe.innerHTML = '<option value="">Todas as Equipes</option>';
+            equipes.forEach(e => selectEquipe.innerHTML += `<option value="${e}">${e}</option>`);
+
+            selectCidade.value = cidades.includes(valCidadeAntigo) ? valCidadeAntigo : "";
+            selectEquipe.value = equipes.includes(valEquipeAntigo) ? valEquipeAntigo : "";
+        }
+
+        function renderizarPainelETabela() {
+            let dados = filtrarDados();
+
+            // Ordenação
+            const col = state.ordenacao.coluna;
+            const ordem = state.ordenacao.ordem === 'asc' ? 1 : -1;
+            dados.sort((a, b) => {
+                if ((a[col] || '') < (b[col] || '')) return -1 * ordem;
+                if ((a[col] || '') > (b[col] || '')) return 1 * ordem;
+                return 0;
+            });
+
+            // Atualização de Cards de Estatísticas
+            const total = state.servicos.length;
+            const reagendados = state.servicos.filter(s => s.reagendado).length;
+            const pendentes = total - reagendados;
+            const eficiencia = total > 0 ? Math.round((reagendados / total) * 100) : 0;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-reagendados').innerText = reagendados;
+            document.getElementById('stat-pendentes').innerText = pendentes;
+            document.getElementById('stat-eficiencia').innerText = `${eficiencia}%`;
+
+            // Paginação
+            const limite = state.paginacao.limitePorPagina;
+            const totalPaginas = Math.ceil(dados.length / limite) || 1;
+            if (state.paginacao.paginaAtual > totalPaginas) state.paginacao.paginaAtual = totalPaginas;
+            
+            const inicio = (state.paginacao.paginaAtual - 1) * limite;
+            const fim = inicio + limite;
+            const dadosPaginados = dados.slice(inicio, fim);
+
+            document.getElementById('pagination-info').innerText = `Mostrando ${dados.length > 0 ? inicio + 1 : 0} até ${Math.min(fim, dados.length)} de ${dados.length} registros`;
+            
+            document.getElementById('prev-page').disabled = state.paginacao.paginaAtual === 1;
+            document.getElementById('next-page').disabled = state.paginacao.paginaAtual === totalPaginas;
+
+            // Renderizar números de páginas
+            const containerPaginas = document.getElementById('page-numbers');
+            containerPaginas.innerHTML = '';
+            for (let i = 1; i <= totalPaginas; i++) {
+                if (i === 1 || i === totalPaginas || (i >= state.paginacao.paginaAtual - 1 && i <= state.paginacao.paginaAtual + 1)) {
+                    const btn = document.createElement('button');
+                    btn.className = `px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${state.paginacao.paginaAtual === i ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'}`;
+                    btn.innerText = i;
+                    btn.addEventListener('click', () => {
+                        state.paginacao.paginaAtual = i;
+                        renderizarPainelETabela();
+                    });
+                    containerPaginas.appendChild(btn);
+                }
+            }
+
+            // Tabela Body
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            if (dadosPaginados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Nenhum serviço localizado para os filtros atuais.</td></tr>`;
+                return;
+            }
+
+            dadosPaginados.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = `border-b border-slate-200 dark:border-slate-800/60 text-sm hover:bg-slate-100/50 dark:hover:bg-slate-800/40 ${item.reagendado ? 'row-reagendada' : ''}`;
+                
+                let acaoBtn = '';
+                if (item.reagendado) {
+                    acaoBtn = `
+                        <div class="flex flex-col items-center gap-0.5">
+                            <span class="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-500 text-xs px-2.5 py-1 rounded-full font-bold">
+                                <i class="fa-solid fa-check"></i> Reagendado
+                            </span>
+                            <span class="text-[10px] text-slate-400 font-medium tracking-tight max-w-[120px] truncate" title="${item.reagendado_por}">Por: ${item.reagendado_por}</span>
+                        </div>
+                    `;
+                } else {
+                    acaoBtn = `
+                        <button onclick="marcarComoReagendado('${item.id}')" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 active:scale-95 transition-all whitespace-nowrap">
+                            <i class="fa-solid fa-calendar-plus mr-1"></i> Reagendar
+                        </button>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-5 font-bold tracking-wider text-slate-400 dark:text-slate-500">${item.cod_os}</td>
+                    <td class="p-5 font-bold text-slate-700 dark:text-slate-200">${item.cliente}</td>
+                    <td class="p-5 font-semibold">${item.cidade}</td>
+                    <td class="p-5 font-medium"><span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">${item.tipo_servico}</span></td>
+                    <td class="p-5 font-semibold text-slate-600 dark:text-slate-400">${item.nome_equipe}</td>
+                    <td class="p-5 text-xs text-slate-500 dark:text-slate-400 font-medium max-w-[350px] break-words">${item.ocorrencia_contrato}</td>
+                    <td class="p-5 text-center">${acaoBtn}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function marcarComoReagendado(id) {
+            const index = state.servicos.findIndex(s => s.id === id);
+            if (index !== -1) {
+                state.servicos[index].reagendado = true;
+                state.servicos[index].reagendado_por = state.usuarioLogado;
+                state.servicos[index].reagendado_em = new Date().toLocaleString('pt-BR');
+                
+                renderizarPainelETabela();
+                showToast(`O.S. ${state.servicos[index].cod_os} marcada como reagendada!`, 'success');
+                await enviarDadosNuvem();
+            }
+        }
+
+        function exportarReagendados() {
+            const filtrados = state.servicos.filter(s => s.reagendado);
+            if (filtrados.length === 0) {
+                showToast('Não há registros reagendados para exportação.', 'error');
+                return;
+            }
+
+            const dadosExportacao = filtrados.map(s => ({
+                "Código O.S.": s.cod_os,
+                "Cliente": s.cliente,
+                "Cidade": s.cidade,
+                "Tipo de Serviço": s.tipo_servico,
+                "Equipe": s.nome_equipe,
+                "Ocorrência": s.ocorrencia_contrato,
+                "Reagendado Por": s.reagendado_por,
+                "Data/Hora": s.reagendado_em
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dadosExportacao);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Reagendados");
+            XLSX.writeFile(workbook, `ISP_Reagendados_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('Relatório baixado com sucesso!', 'success');
         }
     </script>
 </body>
