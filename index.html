@@ -167,7 +167,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                     <div id="live-indicator" class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium">
-                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div id="live-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                         <span id="live-indicator-text">Sincronizado</span>
                     </div>
                 </div>
@@ -277,15 +277,22 @@
             filtros: { busca: '', cidade: '', equipe: '' },
             ordenacao: { coluna: 'cod_os', ordem: 'asc' },
             paginacao: { paginaAtual: 1, limitePorPagina: 15 },
-            usuarioLogado: ''
+            usuarioLogado: '',
+            estaSalvando: false 
         };
 
         document.addEventListener('DOMContentLoaded', () => {
             definirUsuario();
             configurarComponentes();
             configurarSidebarRetratil();
-            baixarDadosNuvem();
-            setInterval(baixarDadosNuvem, 30000); // 30 segundos mantém estabilidade de sincronismo
+            baixarDadosNuvem(true); 
+            
+            // Intervalo de 4 segundos garante tempo real estável sem estourar limite da API
+            setInterval(() => {
+                if (!state.estaSalvando) {
+                    baixarDadosNuvem(false);
+                }
+            }, 4000);
         });
 
         function showSync(exibir, texto = "Sincronizando...") {
@@ -319,7 +326,7 @@
             }, 3500);
         }
 
-        async function baixarDadosNuvem() {
+        async function baixarDadosNuvem(isFirstLoad = false) {
             try {
                 const res = await fetch(`${API_URL}/latest`, {
                     method: 'GET',
@@ -329,13 +336,41 @@
                 const data = await res.json();
                 
                 if (data.record && Array.isArray(data.record.servicos)) {
-                    state.servicos = data.record.servicos;
-                    atualizarDropdownsFiltros();
+                    
+                    // LÓGICA DE MESCLAGEM EM TEMPO REAL:
+                    // Se já temos dados em memória, mesclamos os estados de reagendamento vindos da nuvem
+                    if (state.servicos.length > 0 && !isFirstLoad) {
+                        const nuvemMap = new Map(data.record.servicos.map(s => [String(s.cod_os).trim(), s]));
+                        
+                        state.servicos.forEach(localItem => {
+                            const nuvemItem = nuvemMap.get(String(localItem.cod_os).trim());
+                            if (nuvemItem) {
+                                // Se mudou o status ou quem reagendou na nuvem, atualiza em tempo real na tela
+                                if (localItem.reagendado !== nuvemItem.reagendado || localItem.reagendado_por !== nuvemItem.reagendado_por) {
+                                    localItem.reagendado = nuvemItem.reagendado;
+                                    localItem.reagendado_por = nuvemItem.reagendado_por;
+                                    localItem.reagendado_em = nuvemItem.reagendado_em;
+                                }
+                            }
+                        });
+
+                        // Trata o cenário onde uma nova planilha inteira foi dropada por outro usuário
+                        if (state.servicos.length !== data.record.servicos.length) {
+                            state.servicos = data.record.servicos;
+                            atualizarDropdownsFiltros();
+                        }
+                    } else {
+                        // Primeira carga ou se a memória local estiver vazia
+                        state.servicos = data.record.servicos;
+                        atualizarDropdownsFiltros();
+                    }
+
                     renderizarPainelETabela();
                     
                     document.getElementById('live-indicator-text').innerText = "Sincronizado";
+                    document.getElementById('live-dot').className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
                     document.getElementById('live-indicator').className = "flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium";
-                } else {
+                } else if (isFirstLoad) {
                     document.getElementById('table-body').innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Banco na nuvem vazio. Importe uma planilha técnica para começar!</td></tr>`;
                 }
             } catch (err) {
@@ -343,12 +378,14 @@
                 const indicator = document.getElementById('live-indicator-text');
                 if (indicator) {
                     document.getElementById('live-indicator-text').innerText = "Erro de Conexão";
+                    document.getElementById('live-dot').className = "w-2 h-2 rounded-full bg-rose-500";
                     document.getElementById('live-indicator').className = "flex items-center gap-2 bg-rose-100 dark:bg-rose-950/40 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-medium";
                 }
             }
         }
 
         async function enviarDadosNuvem() {
+            state.estaSalvando = true; 
             showSync(true, "Salvando na nuvem...");
             try {
                 const res = await fetch(API_URL, {
@@ -365,6 +402,8 @@
                 console.error(err);
                 showSync(true, "Erro ao salvar na nuvem!");
                 setTimeout(() => showSync(false), 3000);
+            } finally {
+                state.estaSalvando = false; 
             }
         }
 
@@ -510,7 +549,6 @@
                         return;
                     }
 
-                    // Cria um Map indexado para preservar a marcação das O.S. que já existem na tela
                     const servicosAntigosMap = new Map();
                     if (Array.isArray(state.servicos)) {
                         state.servicos.forEach(s => {
@@ -545,7 +583,6 @@
                                     tipo_servico: servicoLimpo,
                                     nome_equipe: limparTextoBruto(equipeBruta, "Sem Equipe"),
                                     ocorrencia_contrato: (idxOcorrencia !== -1 && row[idxOcorrencia]) ? String(row[idxOcorrencia]).trim() : "-",
-                                    // Preserva o estado de marcação se ele já existir na memória local
                                     reagendado: jaExistia ? jaExistia.reagendado : false,
                                     reagendado_por: jaExistia ? jaExistia.reagendado_por : "",
                                     reagendado_em: jaExistia ? jaExistia.reagendado_em : ""
@@ -661,7 +698,6 @@
             const dadosFiltrados = filtrarDados();
             const dadosOrdenados = ordenarDados(dadosFiltrados);
 
-            // Atualização dos Painéis de Contadores
             const total = dadosFiltrados.length;
             const reagendados = dadosFiltrados.filter(s => s.reagendado).length;
             const pendentes = total - reagendados;
@@ -672,7 +708,6 @@
             document.getElementById('stat-pendentes').innerText = pendentes;
             document.getElementById('stat-eficiencia').innerText = `${eficiencia}%`;
 
-            // Tratamento da Paginação
             const limite = state.paginacao.limitePorPagina;
             const totalPaginas = Math.ceil(total / limite) || 1;
             
@@ -686,7 +721,6 @@
 
             document.getElementById('pagination-info').innerText = `Mostrando ${total > 0 ? inicio + 1 : 0} até ${Math.min(fim, total)} de ${total} registros`;
 
-            // Renderizar numeração de páginas
             const containerPaginas = document.getElementById('page-numbers');
             containerPaginas.innerHTML = '';
             
@@ -700,7 +734,6 @@
             document.getElementById('prev-page').disabled = state.paginacao.paginaAtual === 1;
             document.getElementById('next-page').disabled = state.paginacao.paginaAtual === totalPaginas;
 
-            // Renderização das Linhas da Tabela
             const tbody = document.getElementById('table-body');
             if (dadosPaginados.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
